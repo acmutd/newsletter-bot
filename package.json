@@ -1,0 +1,29 @@
+{
+  "name": "newsletter-bot",
+  "version": "1.0.0",
+  "description": "An ECS-wide newsletter bot that brings the latest events to UTD students!",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/acmutd/newsletter-bot.git"
+  },
+  "author": "Jafar Ali",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/acmutd/newsletter-bot/issues"
+  },
+  "homepage": "https://github.com/acmutd/newsletter-bot#readme",
+  "dependencies": {
+    "css-color-checker": "^1.6.1",
+    "discord.js": "^12.5.1",
+    "google-spreadsheet": "^3.0.14",
+    "leeks.js": "0.0.9",
+    "mongoose": "^5.11.7",
+    "node-schedule": "^1.3.2",
+    "shlex": "^2.0.2",
+    "uuid": "^8.3.2"
+  }
+}
