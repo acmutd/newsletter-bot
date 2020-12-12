@@ -7,7 +7,7 @@ import { settings } from "./botsettings";
 let client: NewsletterClient = new NewsletterClient({
     token: settings.token,
     dbUrl: settings.databaseURL,
-    sentryDSN: settings.sentryDNS,
+    // sentryDSN: settings.sentryDNS,
     commandPath: path.join(process.cwd(), "dist", "commands"),
     eventPath: path.join(process.cwd(), "dist", "events"),
     responseFormat: settings.responseFormat,

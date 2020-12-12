@@ -40,7 +40,7 @@ export default class NewsletterService {
     // Event monitoring and handling //
     //
     public async send() {
-        return; // disable newsletter for now
+        // return; // disable newsletter for now
         // fetch data from google sheets
         console.log("Running newsletter.send() process!");
 
@@ -91,7 +91,6 @@ export default class NewsletterService {
                 "\n- Respond with a number to RSVP for an event!\n\n- Respond with `unsubscribe` to unsubscribe from the ACM weekly newsletter.\n``",
             author: {
                 name: "The Association for Computing Machinery",
-                icon_url: settings.acmLogoURL,
             },
             color: 16738560,
             footer: {
@@ -145,6 +144,8 @@ export default class NewsletterService {
         // reschedule a new newsletter task for next week
         this.schedule();
     }
+
+    public async buildNewsletter(response: any) {}
 
     /**
      * Formats Date object into `HH:MM AM/PM`, in CST

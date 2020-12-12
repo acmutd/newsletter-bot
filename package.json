@@ -22,6 +22,7 @@
     "google-spreadsheet": "^3.0.14",
     "leeks.js": "0.0.9",
     "mongoose": "^5.11.7",
+    "mongoose-function": "^0.1.0",
     "node-schedule": "^1.3.2",
     "shlex": "^2.0.2",
     "uuid": "^8.3.2"

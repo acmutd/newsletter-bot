@@ -91,7 +91,7 @@ export default class DatabaseManager {
         try {
             // await this.schemas.response.create({ type, message });
             // await this.recache('response');
-            // return true;
+            return true;
         } catch (err) {
             return false;
         }
@@ -100,7 +100,7 @@ export default class DatabaseManager {
         try {
             // await this.schemas.response.findOneAndDelete({ message });
             // await this.recache('response');
-            // return true;
+            return true;
         } catch (err) {
             return false;
         }

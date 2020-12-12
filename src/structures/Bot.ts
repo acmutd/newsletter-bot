@@ -17,7 +17,7 @@ export interface BotConfig {
     dbUrl: string;
     commandPath: string;
     eventPath: string;
-    sentryDSN: string;
+    // sentryDSN: string;
     responseFormat: ResponseFormat;
     disabledCommands: string[] | undefined;
     disabledCategories: string[] | undefined;
