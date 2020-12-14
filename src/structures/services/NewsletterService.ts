@@ -51,6 +51,7 @@ export default class NewsletterService {
         await doc.loadInfo();
 
         const sheet = doc.sheetsByIndex[1];
+        const newSheet = doc.sheetsByTitle["ACM"];
         const rows = await sheet.getRows();
         const validRows = rows.filter(
             (row: any) =>
@@ -145,7 +146,17 @@ export default class NewsletterService {
         this.schedule();
     }
 
-    public async buildNewsletter(response: any) {}
+    //* Embed Builders
+    /**
+     * Builds and returns an event embed for a single org.
+     * @param sheet the org's Google Sheet worksheet
+     */
+    public buildOrg(sheet: any) {}
+
+    /**
+     * Builds and returns an annoucement embed for a particular org.
+     */
+    public buildAnnoucement() {}
 
     /**
      * Formats Date object into `HH:MM AM/PM`, in CST

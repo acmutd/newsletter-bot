@@ -166,10 +166,10 @@ export abstract class WizardNode {
         return details;
     }
 
-    abstract async preSendCB(
+    abstract preSendCB(
         details: MessageEmbedOptions
     ): Promise<MessageEmbedOptions | void>;
-    abstract async validationCB(response: Message): Promise<any>;
+    abstract validationCB(response: Message): Promise<any>;
 
     async emit(): Promise<WizardNodeResponse> {
         let details = this.implementDefaults(this.overwrites);

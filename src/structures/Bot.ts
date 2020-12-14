@@ -79,12 +79,10 @@ export default class NewsletterClient extends Client {
         this.events.scanEvents();
         this.error.setup();
 
+        this.on("debug", (e) => {
+            console.error(e);
+        });
+
         await this.login(this.config.token);
-
-        // this.on('debug', (e) => {
-        //     console.error(e);
-        // });
-
-        // await this.services.rr.fetchMsgs();
     }
 }

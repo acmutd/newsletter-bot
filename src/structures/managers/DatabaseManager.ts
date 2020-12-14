@@ -4,17 +4,20 @@ import { Collection } from "discord.js";
 import { settings } from "../../botsettings";
 import MemberSchema, { Member } from "../models/Member";
 import TaskSchema, { TaskData } from "../models/Task";
+import OrgSchema, { Org, OrgData } from "../models/Org";
 
 export interface SchemaTypes {
     member: Model<Member>;
     // response: Model<Response>;
     // rrmessage: Model<RRMessage>;
     task: Model<TaskData>;
+    org: Model<Org>;
 }
 
 export interface CacheTypes {
     // responses: Collection<string, Response>;
     // rrmessages: Collection<string, RRMessage>;
+    orgs: Collection<string, OrgData>;
 }
 
 export default class DatabaseManager {
@@ -32,6 +35,7 @@ export default class DatabaseManager {
         this.cache = {
             // responses: new Collection(),
             // rrmessages: new Collection(),
+            orgs: new Collection(),
         };
         this.url = config.dbUrl;
         this.schemas = {
@@ -39,6 +43,7 @@ export default class DatabaseManager {
             // response: ResponseSchema,
             // rrmessage: RRMessageSchema,
             task: TaskSchema,
+            org: OrgSchema,
         };
     }
 
@@ -64,54 +69,87 @@ export default class DatabaseManager {
         try {
             // await this.recache('response');
             // await this.recache('rrmessage');
+            await this.recache("org");
         } catch (err) {
             this.client.logger.error(err);
         }
     }
     public async recache(schema: keyof SchemaTypes, cache?: keyof CacheTypes) {
         try {
-            // let docs = await (this.schemas[schema] as Model<any>).find({});
-            // this.cache[cache ?? (`${schema}s` as keyof CacheTypes)] = new Collection<string, any>();
-            // docs.forEach((doc) => {
-            //     this.cache[cache ?? (`${schema}s` as keyof CacheTypes)].set(
-            //         doc['_id'] as string,
-            //         doc
-            //     );
-            // });
+            let docs = await (this.schemas[schema] as Model<any>).find({});
+            this.cache[
+                cache ?? (`${schema}s` as keyof CacheTypes)
+            ] = new Collection<string, any>();
+            docs.forEach((doc) => {
+                this.cache[cache ?? (`${schema}s` as keyof CacheTypes)].set(
+                    doc["_id"] as string,
+                    doc
+                );
+            });
         } catch (err) {
             this.client.logger.error(err);
         }
     }
 
     // * Abstraction
-    public async responseAdd(
-        // type: ResponsesType,
-        message: string
+    // org CRUD
+    public orgFind(id: string) {
+        return this.cache.orgs.find((o) => o._id == id);
+    }
+
+    public async orgAdd(org: OrgData): Promise<boolean> {
+        try {
+            await this.schemas.org.create(org);
+            await this.recache("org");
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
+
+    public async orgUpdate(org: OrgData): Promise<boolean> {
+        try {
+            await this.schemas.org.update({ _id: org["_id"] }, org);
+            await this.recache("org");
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
+
+    public async orgDelete(id: string): Promise<boolean> {
+        try {
+            await this.schemas.org.findOneAndDelete({ _id: id });
+            await this.recache("org");
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
+
+    public async annoucementAdd(
+        id: string,
+        annoucement: any
     ): Promise<boolean> {
         try {
-            // await this.schemas.response.create({ type, message });
-            // await this.recache('response');
+            await this.schemas.org.update(
+                { _id: id },
+                { $push: { annoucements: annoucement } }
+            );
+            await this.recache("org");
             return true;
         } catch (err) {
             return false;
         }
     }
-    public async responseDelete(message: string): Promise<boolean> {
+
+    public async announcementClear(id: string): Promise<boolean> {
         try {
-            // await this.schemas.response.findOneAndDelete({ message });
-            // await this.recache('response');
+            await this.schemas.org.update({ _id: id }, { annoucements: [] });
+            await this.recache("org");
             return true;
         } catch (err) {
             return false;
         }
     }
-
-    public async rrmsgAdd(newData: any) {
-        // await this.schemas.rrmessage.create(newData);
-        // await this.recache('rrmessage');
-        // await this.recache('response');
-    }
-    public async rrmsgDelete(id: string) {}
-
-    public async strikeAdd(amount: number, id: string) {}
 }
