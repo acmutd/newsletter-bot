@@ -94,7 +94,8 @@ export default class DatabaseManager {
     // * Abstraction
     // org CRUD
     public orgFind(id: string) {
-        return this.cache.orgs.find((o) => o._id == id);
+        const org = this.cache.orgs.find((o) => o._id == id);
+        return org;
     }
 
     public async orgAdd(org: OrgData): Promise<boolean> {
@@ -109,7 +110,7 @@ export default class DatabaseManager {
 
     public async orgUpdate(org: OrgData): Promise<boolean> {
         try {
-            await this.schemas.org.update({ _id: org["_id"] }, org);
+            await this.schemas.org.updateOne({ _id: org["_id"] }, org);
             await this.recache("org");
             return true;
         } catch (err) {
@@ -132,7 +133,7 @@ export default class DatabaseManager {
         annoucement: any
     ): Promise<boolean> {
         try {
-            await this.schemas.org.update(
+            await this.schemas.org.updateOne(
                 { _id: id },
                 { $push: { annoucements: annoucement } }
             );

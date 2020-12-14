@@ -1,6 +1,7 @@
 import { MessageEmbed } from "discord.js";
 import { settings } from "../botsettings";
 import Command, { CommandContext } from "../structures/Command";
+import { Org, OrgData } from "../structures/models/Org";
 
 export default class OrgCommand extends Command {
     constructor() {
@@ -37,7 +38,7 @@ export default class OrgCommand extends Command {
 }
 
 async function orgInfo({ msg, client }: CommandContext): Promise<MessageEmbed> {
-    if (client.database.orgFind(msg.guild!.id))
+    if (!client.database.orgFind(msg.guild!.id))
         await client.database.orgAdd({ _id: msg.guild!.id });
     const org = client.database.orgFind(msg.guild!.id);
     const field = (val: any) => `\`\`\`${val ?? "N/A"}\`\`\``;
@@ -60,27 +61,27 @@ async function orgInfo({ msg, client }: CommandContext): Promise<MessageEmbed> {
             "\nThe field names are specified in **square brackets before each field**.",
         fields: [
             {
-                name: "[name] 💬 __Name__",
+                name: "💬 [name] __Name__",
                 value: field(org?.name),
             },
             {
-                name: "[abbr] 🆔 __Abbreviated Name__",
+                name: "🆔 [abbr] __Abbreviated Name__",
                 value: field(org?.abbr),
             },
             {
-                name: "[description] 🖋 __Description__",
+                name: "🖋 [description] __Description__",
                 value: field(org?.description),
             },
             {
-                name: "[color] 🎨 __Color__",
+                name: "🎨 [color] __Color__",
                 value: field(org?.color),
             },
             {
-                name: "[logo] ✨ __Logo__",
+                name: "✨ [logo] __Logo__",
                 value: field(org?.logo),
             },
             {
-                name: "[website] 🔗 __Website__",
+                name: "🔗 [website] __Website__",
                 value: field(org?.website),
             },
         ],
@@ -90,22 +91,37 @@ async function orgInfo({ msg, client }: CommandContext): Promise<MessageEmbed> {
 
 async function orgUpdate({ msg, client, args }: CommandContext) {
     const options = ["name", "abbr", "description", "color", "logo", "website"];
+
     if (!options.includes(args[1])) {
         client.response.emit(
             msg.channel,
-            `That's not a valid option. Please choose the following: \n${options.map(
-                (o) => `\`${settings.prefix}org update ${o}\`\n`
-            )}`,
+            `That's not a valid option. Please choose the following: \n${options
+                .map((o) => `\`${settings.prefix}org update ${o}\``)
+                .join("\n")}`,
             "invalid"
         );
+        return;
     }
 
-    if (client.database.orgFind(msg.guild!.id))
+    if (!args[2]) {
+        client.response.emit(
+            msg.channel,
+            "You must enter the value of the field at the end of the command!",
+            "invalid"
+        );
+        return;
+    }
+
+    if (!client.database.orgFind(msg.guild!.id))
         await client.database.orgAdd({ _id: msg.guild!.id });
     const org = client.database.orgFind(msg.guild!.id);
 
+    //! OK THIS LITERALLY MAKES NO FKING SENSE
+    // it works rn but STILL
     let newOrg: any = { ...org };
-    newOrg[args[1]] = args.splice(1).join(" ");
+    newOrg = newOrg["_doc"];
+
+    newOrg[args[1]] = args.splice(2).join(" ");
     const success = await client.database.orgUpdate(newOrg);
 
     if (success) {
