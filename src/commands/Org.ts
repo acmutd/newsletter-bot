@@ -25,12 +25,13 @@ export default class OrgCommand extends Command {
                 orgUpdate(ctx);
                 break;
             case "announcement":
-                orgAnnoucement(ctx, this.name);
+                orgAnnouncement(ctx, this.name);
                 break;
             default:
                 ctx.client.response.emit(
                     ctx.msg.channel,
                     "That was an invalid subcommand!`",
+                    
                     "invalid"
                 );
         }
@@ -138,7 +139,7 @@ async function orgUpdate({ msg, client, args }: CommandContext) {
         );
 }
 
-async function orgAnnoucement(ctx: CommandContext, name: string) {
+async function orgAnnouncement(ctx: CommandContext, name: string) {
     switch (ctx.args[1]) {
         case "add":
             // add announcement
