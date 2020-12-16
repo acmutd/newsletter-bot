@@ -92,7 +92,7 @@ export default class ScheduleManager {
      * Cancels a task and deletes it from memory and database
      */
     public async deleteTask(id: string): Promise<boolean> {
-        if (!this.hasTask(id)) return false;
+        if (!this.getTask(id)) return false;
 
         this.tasks.get(id)?.job?.cancel(); // cancel the job in the task
         this.tasks.delete(id); // remove the task itself
@@ -101,7 +101,11 @@ export default class ScheduleManager {
         return true;
     }
 
-    public hasTask(id: string): Task | undefined {
+    /**
+     * Returns task with ID
+     * @param id 
+     */
+    public getTask(id: string): Task | undefined {
         return this.tasks.get(id);
     }
 

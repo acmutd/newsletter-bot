@@ -78,7 +78,9 @@ export default class NewsletterClient extends Client {
         this.manager.scanCommands();
         this.events.scanEvents();
         this.error.setup();
+        this.scheduler.setup();
 
+        await this.services.newsletter.schedule();
         // this.on("debug", (e) => {
         //     console.error(e);
         // })

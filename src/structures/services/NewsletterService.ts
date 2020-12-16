@@ -22,13 +22,12 @@ export default class NewsletterService {
         // make sure the newspaper task is created/in the db with the appropriate time
         // ? the default time is sunday at 7pm (optimal time for a newsletter imo but idk)
         // TODO: make this changeable via a command
-        this.defaultCron = "00 01 09 * * 0";
-
-        // this.schedule();
+        this.defaultCron = "00 00 19 * * 0";
     }
 
     // schedule the newsletter task
     public async schedule() {
+        // note that because of the specified ID, this will not get duplicated.
         await this.client.scheduler.createTask({
             id: "newsletter",
             type: "newsletter",
