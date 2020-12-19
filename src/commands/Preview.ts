@@ -19,8 +19,14 @@ export default class PreviewCommand extends Command {
             )
         }
 
+        const startTime = (new Date()).getTime();
+
         msg.channel.send(
             await client.services.newsletter.buildOrgEmbed(args[0])
         );
+
+        msg.channel.send(
+            `Preview generated in ${((new Date()).getTime() - startTime)/1000} seconds.`
+        )
     }
 }

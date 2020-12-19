@@ -10,10 +10,19 @@ interface Event {
     room: string;
     date: Date;
 }
+
+
 export default class NewsletterService {
     public client: NewsletterClient;
     private spreadsheetId: string;
     private defaultCron: string;
+
+    // Yse a cached doc whenever time since docCacheTime < docCacheThreshold
+    //   NOTE THAT THIS ONLY AFFECTS METADATA. 
+    //   Updated cells will *always* be reflected, new/deleted sheets will take up to 1 minute to re-cache.
+    private doc: GoogleSpreadsheet | undefined;
+    private docCacheTime = 0;
+    private docCacheThreshold = 60*1000
 
     constructor(client: NewsletterClient) {
         this.client = client;
@@ -83,73 +92,50 @@ export default class NewsletterService {
     }
 
     //* Embed Builders
+
     /**
      * Builds and returns an event embed for a single org.
      * @param orgAbbrev the org's abbreviation (i.e. name of sheet)
      */
     public async buildOrgEmbed(orgAbbrev: any): Promise<MessageEmbed> {
-        const doc = await this.getDoc();
-        const sheet = doc.sheetsByIndex.find(s => s.title == orgAbbrev);
-
-        const orgKey = await this.getOrgKey();
-        
-        // handle org is not the name of a sheet
-        if (sheet == undefined) {
-            return new MessageEmbed({
-                description: `A sheet for ${orgAbbrev} doesn't exist.`,
-                color: "RED"
-            });
-        }
+        // First things first: figure out if this org exists in our organization key
+        const orgMapping = await this.getOrgMapping();
         // handle org not in org key
-        if (!orgKey.has(orgAbbrev)) {
+        if (!orgMapping.has(orgAbbrev)) {
             return new MessageEmbed({
                 description: `${orgAbbrev} isn't configured in the organization key`,
                 color: "RED"
             });
         }
+        const orgConfig = orgMapping.get(orgAbbrev)!;
 
-        const orgConfig = orgKey.get(orgAbbrev)!;
+        // now that it supposedly exists, lets pull the events from the corresponding google sheet
+        // note that this pulls only the next week of events.
+        const events = await this.fetchOrgEvents(orgAbbrev);
+        // handle the case where we can't find this org's sheet
+        if (events == undefined) {
+            return new MessageEmbed({
+                description: `A sheet for ${orgAbbrev} doesn't exist, even though it exists in the organization key!`,
+                color: "RED"
+            });
+        }
 
-        const rows = await sheet.getRows();
-        const validRows = rows.filter(
-            (row: any) =>
-                row["Start Time"] != undefined && row["Start Time"] != "TBA"
-        );
-        const allEvents: Event[] = validRows.map((row: any) => {
-            return {
-                title: row["Event Name"],
-                description: row["Event Description"],
-                division: row["Team/Division"],
-                room: row["Room"],
-                date: new Date(row.Date + " " + row["Start Time"]),
-            };
-        });
-        console.log(allEvents);
+        // At this point, we have our organization configuration and the events themselves.
 
-        // find the events that are for the upcoming week
-        let today = new Date();
-        const events = allEvents.filter((e) => {
-            return (
-                e.date > today &&
-                e.date <
-                    new Date(
-                        today.getFullYear(),
-                        today.getMonth(),
-                        today.getDate() + 7
-                    )
-            );
-        });
-
+        // split events into their divisions
         const ed: any = {};
-        events.forEach((e) => (ed[e.division] = [...ed[e.division], e]));
+        events.forEach((e) => (
+            ed[e.division] = ed.hasOwnProperty(e.division) ? [...ed[e.division], e] : [e]
+        ));
 
-        // create a basic embed
+        // make the actual embed
         let orgEmbed = new MessageEmbed({
             title: `📰 __${orgAbbrev}'s Weekly Newsletter__`,
             description:
                 "\n- Respond with a number to RSVP for an event!\n\n- Respond with `unsubscribe` to unsubscribe from the ACM weekly newsletter.\n``",
             author: {
                 name: orgConfig["Full Name"],
+                iconURL: orgConfig["Logo [URL]"],
             },
             color: 16738560,
             footer: {
@@ -187,7 +173,55 @@ export default class NewsletterService {
         return date.toLocaleString("en-US", options);
     }
 
-    async getOrgKey(): Promise<Map<string, GoogleSpreadsheetRow>> {
+    /**
+     * Returns events in the next week for the specified organization, or `undefined` if that sheet cannot be found.
+     * @param orgAbbrev name of the sheet to look in
+     */
+    async fetchOrgEvents(orgAbbrev: string): Promise<Event[] | undefined> {
+        const doc = await this.getDoc();
+        const sheet = doc.sheetsByIndex.find(s => s.title == orgAbbrev);
+
+        // return undefined if there is no sheet with the name in orgAbbrev
+        if (sheet == undefined) {
+            return undefined;
+        }
+
+        const rows = await sheet.getRows();
+        const validRows = rows.filter(
+            (row: any) =>
+                row["Start Time"] != undefined && row["Start Time"] != "TBA"
+        );
+        const allEvents: Event[] = validRows.map((row: any) => {
+            return {
+                title: row["Event Name"],
+                description: row["Event Description"],
+                division: row["Team/Division"],
+                room: row["Room"],
+                date: new Date(row.Date + " " + row["Start Time"]),
+            };
+        });
+
+        // filter for only events in the upcoming week
+        let today = new Date();
+        const events = allEvents.filter((e) => {
+            return (
+                e.date > today &&
+                e.date <
+                    new Date(
+                        today.getFullYear(),
+                        today.getMonth(),
+                        today.getDate() + 7
+                    )
+            );
+        });
+
+        return events;
+    }
+
+    /**
+     * Reads the organization key from Google Sheets and returns a Map of abbreviation -> config data
+     */
+    async getOrgMapping(): Promise<Map<string, GoogleSpreadsheetRow>> {
         const doc = await this.getDoc();
         const sheet = doc.sheetsByIndex.find(s => s.title == 'Organization Key');
 
@@ -207,13 +241,25 @@ export default class NewsletterService {
         return res;
     }
 
+    /**
+     * Returns the Google Sheets document object for the events spreadsheet, with info loaded.
+     */
     async getDoc(): Promise<GoogleSpreadsheet> {
+        // don't bother re-retrieving the metadata if we recently retrieved it
+        if (this.doc != undefined && (new Date()).getTime() - this.docCacheTime < this.docCacheThreshold) {
+            console.log("A cached version of the newsletter google sheets metadata was used");
+            return this.doc;
+        }
+
         const doc = new GoogleSpreadsheet(this.spreadsheetId);
         doc.useApiKey(settings.keys.sheets);
 
         await doc.loadInfo();
+        this.doc = doc;
+        this.docCacheTime = (new Date()).getTime();
 
         return doc;
     }
 
 }
+

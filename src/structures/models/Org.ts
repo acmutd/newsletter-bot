@@ -13,7 +13,7 @@ export interface OrgData {
     website?: string;
     logo?: string;
     error?: string;
-    annoucements?: any[];
+    announcements?: any[];
 }
 
 export interface Org extends Document {
@@ -27,7 +27,7 @@ export interface Org extends Document {
     website?: string;
     logo?: string;
     error?: string;
-    annoucements?: any[];
+    announcements?: any[];
 }
 
 const orgSchema = new Schema(
@@ -41,7 +41,7 @@ const orgSchema = new Schema(
         website: String,
         logo: String,
         error: String,
-        annoucements: Array,
+        announcements: Array,
     },
     { strict: false }
 );

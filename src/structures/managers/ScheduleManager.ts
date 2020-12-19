@@ -27,7 +27,7 @@ export default class ScheduleManager {
     }
 
     public async setup() {
-        // load in the tasks to schedule from DB and scheule them
+        // load in the tasks to schedule from DB and schedule them
         let res = await this.client.database.schemas.task.find({});
         for (let taskData of res) {
             const td = taskData.toObject();
@@ -56,7 +56,7 @@ export default class ScheduleManager {
             }
             // at this point we know that if the user provided an ID, it is valid
         } else {
-            // at this point we know the user hasnt provided an id
+            // at this point we know the user hasn't provided an id
             // generate an id for our task
             t.id = uuidv4();
         }
