@@ -21,7 +21,6 @@
   },
   "homepage": "https://github.com/acmutd/newsletter-bot#readme",
   "dependencies": {
-    "css-color-checker": "^1.6.1",
     "discord.js": "^12.5.1",
     "google-spreadsheet": "^3.0.14",
     "leeks.js": "0.0.9",
