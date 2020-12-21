@@ -11,18 +11,17 @@ interface Event {
     date: Date;
 }
 
-
 export default class NewsletterService {
     public client: NewsletterClient;
     private spreadsheetId: string;
     private defaultCron: string;
 
     // Yse a cached doc whenever time since docCacheTime < docCacheThreshold
-    //   NOTE THAT THIS ONLY AFFECTS METADATA. 
+    //   NOTE THAT THIS ONLY AFFECTS METADATA.
     //   Updated cells will *always* be reflected, new/deleted sheets will take up to 1 minute to re-cache.
     private doc: GoogleSpreadsheet | undefined;
     private docCacheTime = 0;
-    private docCacheThreshold = 60*1000
+    private docCacheThreshold = 60 * 1000;
 
     constructor(client: NewsletterClient) {
         this.client = client;
@@ -104,7 +103,7 @@ export default class NewsletterService {
         if (!orgMapping.has(orgAbbrev)) {
             return new MessageEmbed({
                 description: `${orgAbbrev} isn't configured in the organization key`,
-                color: "RED"
+                color: "RED",
             });
         }
         const orgConfig = orgMapping.get(orgAbbrev)!;
@@ -116,7 +115,7 @@ export default class NewsletterService {
         if (events == undefined) {
             return new MessageEmbed({
                 description: `A sheet for ${orgAbbrev} doesn't exist, even though it exists in the organization key!`,
-                color: "RED"
+                color: "RED",
             });
         }
 
@@ -124,9 +123,12 @@ export default class NewsletterService {
 
         // split events into their divisions
         const ed: any = {};
-        events.forEach((e) => (
-            ed[e.division] = ed.hasOwnProperty(e.division) ? [...ed[e.division], e] : [e]
-        ));
+        events.forEach(
+            (e) =>
+                (ed[e.division] = ed.hasOwnProperty(e.division)
+                    ? [...ed[e.division], e]
+                    : [e])
+        );
 
         // make the actual embed
         let orgEmbed = new MessageEmbed({
@@ -179,7 +181,7 @@ export default class NewsletterService {
      */
     async fetchOrgEvents(orgAbbrev: string): Promise<Event[] | undefined> {
         const doc = await this.getDoc();
-        const sheet = doc.sheetsByIndex.find(s => s.title == orgAbbrev);
+        const sheet = doc.sheetsByIndex.find((s) => s.title == orgAbbrev);
 
         // return undefined if there is no sheet with the name in orgAbbrev
         if (sheet == undefined) {
@@ -223,7 +225,9 @@ export default class NewsletterService {
      */
     async getOrgMapping(): Promise<Map<string, GoogleSpreadsheetRow>> {
         const doc = await this.getDoc();
-        const sheet = doc.sheetsByIndex.find(s => s.title == 'Organization Key');
+        const sheet = doc.sheetsByIndex.find(
+            (s) => s.title == "Organization Key"
+        );
 
         let res = new Map<string, GoogleSpreadsheetRow>();
 
@@ -233,9 +237,9 @@ export default class NewsletterService {
 
         const rows = await sheet.getRows();
 
-        rows.forEach( row => {
+        rows.forEach((row) => {
             if (row["Abbr. Name [Same as sheet title]"] != undefined)
-                res.set(row["Abbr. Name [Same as sheet title]"], row)
+                res.set(row["Abbr. Name [Same as sheet title]"], row);
         });
 
         return res;
@@ -246,8 +250,13 @@ export default class NewsletterService {
      */
     async getDoc(): Promise<GoogleSpreadsheet> {
         // don't bother re-retrieving the metadata if we recently retrieved it
-        if (this.doc != undefined && (new Date()).getTime() - this.docCacheTime < this.docCacheThreshold) {
-            console.log("A cached version of the newsletter google sheets metadata was used");
+        if (
+            this.doc != undefined &&
+            new Date().getTime() - this.docCacheTime < this.docCacheThreshold
+        ) {
+            console.log(
+                "A cached version of the newsletter google sheets metadata was used"
+            );
             return this.doc;
         }
 
@@ -256,10 +265,8 @@ export default class NewsletterService {
 
         await doc.loadInfo();
         this.doc = doc;
-        this.docCacheTime = (new Date()).getTime();
+        this.docCacheTime = new Date().getTime();
 
         return doc;
     }
-
 }
-

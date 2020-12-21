@@ -11,6 +11,7 @@ import { Client, Intents } from "discord.js";
 import LoggerUtil from "../utils/Logger";
 import ResponseUtil, { ResponseFormat } from "../utils/Responses";
 import { settings } from "../botsettings";
+import SpreadsheetManager from "./managers/SpreadsheetManager";
 
 export interface BotConfig {
     token: string;
@@ -35,6 +36,7 @@ export default class NewsletterClient extends Client {
     public database: DatabaseManager;
     public indicators: IndicatorManager;
     public scheduler: ScheduleManager;
+    public spreadsheet: SpreadsheetManager;
     // public express: ExpressManager;
     // public calendar: CalendarManager;
     // services
@@ -58,6 +60,7 @@ export default class NewsletterClient extends Client {
         this.events = new EventManager(this, config.eventPath);
         this.database = new DatabaseManager(this, config);
         this.scheduler = new ScheduleManager(this);
+        this.spreadsheet = new SpreadsheetManager(this);
         this.error = new ErrorManager(this);
         this.indicators = new IndicatorManager();
         this.services = {
