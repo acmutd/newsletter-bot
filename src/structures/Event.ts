@@ -9,5 +9,5 @@ export default abstract class Event {
         this.name = event;
     }
 
-    public abstract async emit(...args: any[]): Promise<any>;
+    public abstract emit(...args: any[]): Promise<any>;
 }
