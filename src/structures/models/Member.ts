@@ -1,6 +1,6 @@
-import { Schema, model, Document } from "mongoose";
+import { Schema, model, Document, Model } from "mongoose";
 
-export interface Member extends Document {
+export interface iMember extends Document {
     _id: string;
     strikes: number;
     lastStrike: Date;
@@ -18,4 +18,15 @@ const memberSchema = new Schema({
     },
 });
 
-export default model<Member>("member", memberSchema, "members");
+memberSchema.statics.findUnsubscribedIDs = function () {
+    return Member.find({
+        "preferences.subscribed": false,
+    }).map((member: any) => member["_id"]);
+};
+
+export interface MemberModel extends Model<iMember> {
+    findUnsubscribedIDs(): string[];
+}
+
+const Member = model<iMember, MemberModel>("member", memberSchema, "members");
+export default Member;

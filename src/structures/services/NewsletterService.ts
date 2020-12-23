@@ -1,7 +1,12 @@
 import NewsletterClient from "../Bot";
 import { settings } from "../../botsettings";
-import { MessageEmbed } from "discord.js";
+import { Collection, Message, MessageEmbed } from "discord.js";
 import { GoogleSpreadsheet, GoogleSpreadsheetRow } from "google-spreadsheet";
+import {
+    SpreadsheetOrg,
+    SpreadsheetEvent,
+} from "../managers/SpreadsheetManager";
+import Member, { iMember } from "../models/Member";
 
 interface Event {
     title: string;
@@ -9,6 +14,11 @@ interface Event {
     division: string;
     room: string;
     date: Date;
+}
+
+interface OrgWithEvents {
+    events: SpreadsheetEvent[];
+    org: SpreadsheetOrg;
 }
 
 export default class NewsletterService {
@@ -47,48 +57,170 @@ export default class NewsletterService {
     // Event monitoring and handling //
     //
     public async send() {
-        // return; // disable newsletter for now
-        console.log("Running newsletter.send() process!");
+        // recache
+        await this.client.spreadsheet.fetchAllOrgs();
 
-        // create a basic embed
-        let newsletter = await this.buildOrgEmbed("ACM");
+        // get org events
+        const orgWithEvents: OrgWithEvents[] = [];
+        for (const org of this.client.spreadsheet.orgs.array()) {
+            let events = await this.client.spreadsheet.fetchEvents(org.abbr, 7);
+            if (events.length > 0) orgWithEvents.push({ events, org });
+        }
 
-        // loop through all members in member schema, and find the members with preferences.subscribed = false;
-        const unsubscribed = await this.client.database.schemas.member
-            .find({
-                "preferences.subscribed": false,
-            })
-            .map((el: any) => el["_id"]);
-        console.log(unsubscribed);
-        // send to every member in client.members - unsubscribed
-        const members = await this.client.guilds
-            .resolve(settings.guild)
-            ?.members.fetch();
-
-        // remove everyone who is unsubscribed or is a bot
-        const subscribed = members?.filter(
-            (member) => !unsubscribed.includes(member.id) && !member.user.bot
+        // build embed
+        const newsletter: MessageEmbed[] = orgWithEvents.map((d) =>
+            this.buildEventEmbed(d)
         );
 
-        for (let subscriber of subscribed!.values()) {
-            try {
-                await subscriber.send(newsletter);
-            } catch (e) {
-                console.log(
-                    `Subscriber ${subscriber.user.username} has DMs blocked. Newsletter not sent`
-                );
-            }
-        }
-        /*
-                subscribed?.forEach(async (member) => {
-                        const dmChannel = await member.createDM();
-                        dmChannel.send(newsletter);
-                });
-                */
+        // send out
+        let recieved: any = {};
 
-        // reschedule a new newsletter task for next week
+        try {
+            const u = await this.client.database.schemas.member.find();
+            var unsubscribed = u.map((m) => m["_id"]);
+        } catch (e) {
+            this.client.logger.error(e);
+        }
+
+        // loop through org guilds and send newsletter to members
+        const orgsWithGuild = orgWithEvents.filter((o) => !!o.org.guild);
+        for (const data of orgsWithGuild) {
+            // resolve guild
+            try {
+                const guild = await this.client.guilds.fetch(data.org.guild!);
+                var members = await guild.members.fetch();
+            } catch (e) {
+                this.client.logger.error(e);
+                continue;
+            }
+
+            // send to the members
+            members.forEach((m) => {
+                // to send to everyone (for prod), add an '!' before 'unsubscribed' in the line below
+                if (recieved[m.id] != true && unsubscribed.includes(m.id)) {
+                    // ! For testing
+                    // newsletter.forEach((n) => m.send(n));
+                    console.log(
+                        "Would send newsletter to " +
+                            m.user.username +
+                            "#" +
+                            m.user.discriminator
+                    );
+                    recieved[m.id] = true;
+                }
+            });
+        }
+
         this.schedule();
     }
+
+    public buildEventEmbed(data: OrgWithEvents): MessageEmbed {
+        const weekdays = [
+            "Sunday",
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+        ];
+
+        const tte: any = {};
+        data.events.forEach((e) => {
+            if (e.team) {
+                if (tte[e.team]) {
+                    tte[e.team].push(e);
+                } else tte[e.team] = [e];
+            }
+        });
+
+        const now = new Date().toLocaleDateString("en-US", {
+            weekday: "short",
+            month: "long",
+            day: "numeric",
+        });
+
+        return new MessageEmbed({
+            title: data.org.name,
+            description:
+                "\n- Respond with a number to RSVP for an event!\n\n- Respond with `unsubscribe` to unsubscribe from the ACM weekly newsletter.\n",
+            color: data.org.color,
+            author: {
+                name: `${data.org.abbr}'s Weekly Newsletter`,
+                icon_url: data.org.logo,
+                url: data.org.website,
+            },
+            footer: {
+                text: `${now} Newsletter | Powered by Newsletter Bot`,
+                iconURL: this.client.user!.avatarURL() as string,
+            },
+            fields: Object.keys(tte).map((k) => {
+                var val = "";
+                tte[k].forEach((e: SpreadsheetEvent, i: number) => {
+                    val += `\`${i}\`. **${e.name}** on \`${
+                        weekdays[e.date.getDay()]
+                    }\` at \`${e.date.toLocaleString("en-US", {
+                        hour: "numeric",
+                        minute: "numeric",
+                        hour12: true,
+                    })} CST\`\n`;
+                });
+                return {
+                    name: `__**${k}**__`,
+                    value: val ?? "No Events",
+                };
+            }),
+            thumbnail: { url: data.org.logo },
+            url: data.org.website,
+        });
+    }
+
+    public buildHelpEmbed(): MessageEmbed {
+        return new MessageEmbed({});
+    }
+    // public async send() {
+    //     // return; // disable newsletter for now
+    //     console.log("Running newsletter.send() process!");
+
+    //     // create a basic embed
+    //     let newsletter = await this.buildOrgEmbed("ACM");
+
+    //     // loop through all members in member schema, and find the members with preferences.subscribed = false;
+    //     const unsubscribed = await this.client.database.schemas.member
+    //         .find({
+    //             "preferences.subscribed": false,
+    //         })
+    //         .map((el: any) => el["_id"]);
+    //     console.log(unsubscribed);
+    //     // send to every member in client.members - unsubscribed
+    //     const members = await this.client.guilds
+    //         .resolve(settings.guild)
+    //         ?.members.fetch();
+
+    //     // remove everyone who is unsubscribed or is a bot
+    //     const subscribed = members?.filter(
+    //         (member) => !unsubscribed.includes(member.id) && !member.user.bot
+    //     );
+
+    //     for (let subscriber of subscribed!.values()) {
+    //         try {
+    //             await subscriber.send(newsletter);
+    //         } catch (e) {
+    //             console.log(
+    //                 `Subscriber ${subscriber.user.username} has DMs blocked. Newsletter not sent`
+    //             );
+    //         }
+    //     }
+    //     /*
+    //             subscribed?.forEach(async (member) => {
+    //                     const dmChannel = await member.createDM();
+    //                     dmChannel.send(newsletter);
+    //             });
+    //             */
+
+    //     // reschedule a new newsletter task for next week
+    //     this.schedule();
+    // }
 
     //* Embed Builders
 

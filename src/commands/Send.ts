@@ -1,15 +1,16 @@
 import Command, { CommandContext } from "../structures/Command";
 
-export default class HelloCommand extends Command {
+export default class SendCommand extends Command {
     constructor() {
         super({
-            name: "hello",
+            name: "send",
             description: "test",
+            userPermissions: 8,
             dmWorks: true,
         });
     }
 
     public async exec({ msg, client, args }: CommandContext) {
-        msg.channel.send("hello!");
+        client.services.newsletter.send();
     }
 }

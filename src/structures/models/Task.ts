@@ -1,8 +1,8 @@
-import mongoose from 'mongoose';
-import { TaskType } from '../managers/ScheduleManager';
-require('mongoose-function')(mongoose);
+import mongoose from "mongoose";
+import { TaskType } from "../managers/ScheduleManager";
+require("mongoose-function")(mongoose);
 
-export interface TaskData extends mongoose.Document {
+export interface iTask extends mongoose.Document {
     _id: string;
     type: TaskType;
     cron: string | Date;
@@ -17,4 +17,5 @@ const taskSchema = new mongoose.Schema(
     { strict: false }
 );
 
-export default mongoose.model<TaskData>('task', taskSchema, 'tasks');
+const Task = mongoose.model<iTask>("task", taskSchema, "tasks");
+export default Task;

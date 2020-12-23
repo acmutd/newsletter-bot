@@ -16,7 +16,7 @@ export interface OrgData {
     announcements?: any[];
 }
 
-export interface Org extends Document {
+export interface iOrg extends Document {
     // id is the discord guild id
     _id: string;
     // everything else is optional
@@ -46,4 +46,5 @@ const orgSchema = new Schema(
     { strict: false }
 );
 
-export default model<Org>("org", orgSchema, "orgs");
+const Org = model<iOrg>("org", orgSchema, "orgs");
+export default Org;

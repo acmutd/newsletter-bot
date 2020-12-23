@@ -6,12 +6,12 @@ import { settings } from "../../botsettings";
 // * org id is abbr
 type OrgResolvable = number | string;
 
-interface SpreadsheetEvent {
+export interface SpreadsheetEvent {
     date: Date;
     name: string;
     description?: string;
-    start: string;
-    end?: string;
+    start?: Date;
+    end?: Date;
     location: string;
     team?: string;
     speaker: string;
@@ -19,7 +19,7 @@ interface SpreadsheetEvent {
     posterUrl: string;
 }
 
-interface SpreadsheetOrg {
+export interface SpreadsheetOrg {
     abbr: string;
     name: string;
     guild?: string;
@@ -45,7 +45,8 @@ export default class SpreadsheetManager {
         );
 
         this.spreadsheet = new GoogleSpreadsheet(
-            "1m_Y5ZgOUbAMn-T_gGTzzQ7ruiNKvs-8WFNoPfOuZL8Q" // <- spreadsheet id
+            // <- spreadsheet id
+            "1-i-70gyCkRh3m8mRbMzXBCBXKqq5_tVsFssR53lF6jM"
         );
         this.spreadsheet.useApiKey(settings.keys.sheets);
 
@@ -87,9 +88,10 @@ export default class SpreadsheetManager {
     public async fetchAllOrgs(): Promise<SpreadsheetOrg[]> {
         await this.spreadsheet.loadInfo();
         // index zero should always be the org sheet
-        const sheet = this.spreadsheet.sheetsByIndex.find(
-            (e) => e.title == "Organization Key"
-        )!;
+        const sheet =
+            this.spreadsheet.sheetsByIndex.find(
+                (e) => e.title == "Organization Key"
+            ) ?? this.spreadsheet.sheetsByIndex[0];
         const rows = await sheet.getRows();
         return rows.map((row) => {
             const org = this.rowToOrg(row);
@@ -107,12 +109,14 @@ export default class SpreadsheetManager {
         let sheet;
         if (typeof org == "number") sheet = this.spreadsheet.sheetsByIndex[org];
         else sheet = this.spreadsheet.sheetsByTitle[org];
+        if (!sheet) return [];
 
         // get events
         const rows = await sheet.getRows();
 
         const now = new Date();
-        const max = new Date(now.getDate() + days);
+        const max = new Date();
+        max.setDate(now.getDate() + days);
         this.lastRecache = now;
 
         return rows
@@ -137,18 +141,48 @@ export default class SpreadsheetManager {
     }
 
     private rowToEvent(row: any): SpreadsheetEvent {
+        const start = row["Start Time"];
         return {
-            date: new Date(row["Date"] + " " + row["Start Time"]),
+            date:
+                this.generateDate(row["Date"], start) ?? new Date(row["Date"]),
             name: row["Event Name"] ?? "unnamed event",
             description: row["Event Description"],
-            start: row["Start Time"] ?? "TBA",
-            end: row["Start Time"],
+            start: this.generateDate(row["Date"], start),
+            end: this.generateDate(row["Date"], row["End Time"]),
             location: row["Location"],
             team: row["Team/Division"],
             speaker: row["Event Speaker(s)"],
             speakerContact: row["Event Speaker(s) Contact Information"],
             posterUrl: row["Link to Poster(s)"],
         };
+    }
+
+    private generateDate(date: string, time: string): Date | undefined {
+        if (!time || !date) return;
+
+        // check to see if there is a pm or am
+        let type: "am" | "pm";
+        let t = time.toLowerCase();
+
+        if (t.includes("pm")) type = "pm";
+        else if (t.includes("am")) type = "am";
+        else return;
+
+        t = t.replace(type, "");
+        t = t.replace(" ", "");
+
+        const digits = t.split(":");
+        if (digits.length != 2) return;
+
+        const hour =
+            type == "am" ? parseInt(digits[0]) : parseInt(digits[0]) + 12;
+        const minute = parseInt(digits[1]);
+
+        const day = new Date(date);
+        day.setHours(0, 0, 0, 0);
+        day.setHours(hour, minute, 0, 0);
+
+        return day;
     }
 
     // TODO: Create command that org leaders can run to update org cache data

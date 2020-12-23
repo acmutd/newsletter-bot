@@ -2,16 +2,17 @@ import NewsletterClient, { BotConfig } from "../Bot";
 import mongoose, { Model } from "mongoose";
 import { Collection } from "discord.js";
 import { settings } from "../../botsettings";
-import MemberSchema, { Member } from "../models/Member";
-import TaskSchema, { TaskData } from "../models/Task";
-import OrgSchema, { Org, OrgData } from "../models/Org";
+import MemberSchema, { iMember, MemberModel } from "../models/Member";
+import TaskSchema, { iTask } from "../models/Task";
+import OrgSchema, { iOrg, OrgData } from "../models/Org";
 
 export interface SchemaTypes {
-    member: Model<Member>;
+    // member: Model<iMessage>
+    member: MemberModel;
     // response: Model<Response>;
     // rrmessage: Model<RRMessage>;
-    task: Model<TaskData>;
-    org: Model<Org>;
+    task: Model<iTask>;
+    org: Model<iOrg>;
 }
 
 export interface CacheTypes {

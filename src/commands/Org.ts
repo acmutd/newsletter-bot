@@ -1,7 +1,7 @@
 import { MessageEmbed } from "discord.js";
 import { settings } from "../botsettings";
 import Command, { CommandContext } from "../structures/Command";
-import { Org, OrgData } from "../structures/models/Org";
+import { iOrg, OrgData } from "../structures/models/Org";
 
 export default class OrgCommand extends Command {
     constructor() {
@@ -31,7 +31,7 @@ export default class OrgCommand extends Command {
                 ctx.client.response.emit(
                     ctx.msg.channel,
                     "That was an invalid subcommand!`",
-                    
+
                     "invalid"
                 );
         }
