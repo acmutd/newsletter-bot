@@ -7,6 +7,7 @@ import {
     SpreadsheetEvent,
 } from "../managers/SpreadsheetManager";
 import Member, { iMember } from "../models/Member";
+import { EventData } from "../models/Event";
 
 interface Event {
     title: string;
@@ -62,14 +63,41 @@ export default class NewsletterService {
 
         // get org events
         const orgWithEvents: OrgWithEvents[] = [];
+        let eventsToDB: EventData[] = [];
+        let count = 1;
         for (const org of this.client.spreadsheet.orgs.array()) {
             let events = await this.client.spreadsheet.fetchEvents(org.abbr, 7);
-            if (events.length > 0) orgWithEvents.push({ events, org });
+
+            if (events.length > 0) {
+                var addedID: SpreadsheetEvent[] = [];
+                var toDB: any = [];
+
+                events.forEach((e) => {
+                    addedID.push({ ...e, id: count });
+                    toDB.push({
+                        _id: count,
+                        abbr: org.abbr,
+                        event: { ...e, id: count },
+                    });
+                    count++;
+                });
+
+                events = [...addedID];
+                eventsToDB = [...toDB, ...eventsToDB];
+                orgWithEvents.push({ events, org });
+            }
+        }
+
+        // update the db
+        try {
+            await this.client.database.eventAddNewList(eventsToDB);
+        } catch (e) {
+            this.client.logger.error(e);
         }
 
         // build embed
-        const newsletter: MessageEmbed[] = orgWithEvents.map((d) =>
-            this.buildEventEmbed(d)
+        const newsletter: MessageEmbed[] = orgWithEvents.map((data) =>
+            this.buildEventEmbed(data)
         );
 
         // send out
@@ -110,7 +138,6 @@ export default class NewsletterService {
                 }
             });
         }
-
         this.schedule();
     }
 
@@ -156,8 +183,8 @@ export default class NewsletterService {
             },
             fields: Object.keys(tte).map((k) => {
                 var val = "";
-                tte[k].forEach((e: SpreadsheetEvent, i: number) => {
-                    val += `\`${i}\`. **${e.name}** on \`${
+                tte[k].forEach((e: SpreadsheetEvent) => {
+                    val += `\`${e.id ?? ""}\`. **${e.name}** on \`${
                         weekdays[e.date.getDay()]
                     }\` at \`${e.date.toLocaleString("en-US", {
                         hour: "numeric",

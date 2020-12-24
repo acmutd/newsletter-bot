@@ -2,13 +2,16 @@ import NewsletterClient, { BotConfig } from "../Bot";
 import mongoose, { Model } from "mongoose";
 import { Collection } from "discord.js";
 import { settings } from "../../botsettings";
-import MemberSchema, { iMember, MemberModel } from "../models/Member";
+import MemberSchema, { iMember } from "../models/Member";
 import TaskSchema, { iTask } from "../models/Task";
 import OrgSchema, { iOrg, OrgData } from "../models/Org";
+import EventSchema, { EventData, iEvent } from "../models/Event";
+import SpreadsheetManager, { SpreadsheetEvent } from "./SpreadsheetManager";
 
 export interface SchemaTypes {
     // member: Model<iMessage>
-    member: MemberModel;
+    member: Model<iMember>;
+    event: Model<iEvent>;
     // response: Model<Response>;
     // rrmessage: Model<RRMessage>;
     task: Model<iTask>;
@@ -18,9 +21,9 @@ export interface SchemaTypes {
 export interface CacheTypes {
     // responses: Collection<string, Response>;
     // rrmessages: Collection<string, RRMessage>;
+    events: Collection<string, EventData>;
     orgs: Collection<string, OrgData>;
 }
-
 export default class DatabaseManager {
     public client: NewsletterClient;
     public url: string;
@@ -36,11 +39,13 @@ export default class DatabaseManager {
         this.cache = {
             // responses: new Collection(),
             // rrmessages: new Collection(),
+            events: new Collection(),
             orgs: new Collection(),
         };
         this.url = config.dbUrl;
         this.schemas = {
             member: MemberSchema,
+            event: EventSchema,
             // response: ResponseSchema,
             // rrmessage: RRMessageSchema,
             task: TaskSchema,
@@ -123,6 +128,18 @@ export default class DatabaseManager {
         try {
             await this.schemas.org.findOneAndDelete({ _id: id });
             await this.recache("org");
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
+
+    // add crud for event
+    public async eventAddNewList(eventsWithIds: EventData[]): Promise<boolean> {
+        try {
+            await this.schemas.event.deleteMany({});
+            await this.schemas.event.insertMany(eventsWithIds);
+            await this.recache("event");
             return true;
         } catch (err) {
             return false;

@@ -7,6 +7,7 @@ import { settings } from "../../botsettings";
 type OrgResolvable = number | string;
 
 export interface SpreadsheetEvent {
+    id?: number;
     date: Date;
     name: string;
     description?: string;
