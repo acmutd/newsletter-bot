@@ -103,7 +103,7 @@ export default class ScheduleManager {
 
     /**
      * Returns task with ID
-     * @param id 
+     * @param id
      */
     public getTask(id: string): Task | undefined {
         return this.tasks.get(id);
@@ -138,6 +138,7 @@ export default class ScheduleManager {
                 break;
             case "rsvp_reminder":
                 // example: this.client.rsvpmanager.sendRSVP(data.event_id);
+                this.client.services.newsletter.remind(task.payload);
                 break;
         }
 

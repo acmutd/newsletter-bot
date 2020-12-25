@@ -104,4 +104,36 @@ export default class CommandService {
             this.client.indicators.removeUser("usingCommand", msg.author);
         }
     }
+
+    buildDMHelp() {
+        // build fields
+        const embed = new MessageEmbed();
+        embed.setTitle("__**Newsletter Command List**__");
+        embed.setColor("#000000");
+
+        for (const c of this.client.manager.commands.array())
+            if (c.dmWorks)
+                embed.addField(
+                    `${settings.prefix}${c.name}`,
+                    `${
+                        c.usage.length > 0
+                            ? c.usage
+                                  .map(
+                                      (usage) =>
+                                          `\`${settings.prefix}${usage}\``
+                                  )
+                                  .join(", ") + "\n"
+                            : ""
+                    }${c.description}`,
+                    true
+                );
+
+        embed.setFooter(
+            `${embed.fields.length} command${
+                embed.fields.length != 1 ? "s" : ""
+            } available.`
+        );
+
+        return embed;
+    }
 }

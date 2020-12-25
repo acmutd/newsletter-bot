@@ -23,6 +23,7 @@ export interface SpreadsheetEvent {
 export interface SpreadsheetOrg {
     abbr: string;
     name: string;
+    description?: string;
     guild?: string;
     website?: string;
     logo?: string;
@@ -134,6 +135,7 @@ export default class SpreadsheetManager {
         return {
             abbr: row["Abbr. Name [Same as sheet title]"],
             name: row["Full Name"],
+            description: row["Description"],
             guild: row["Guild ID"],
             website: row["Website"],
             logo: row["Logo [URL]"],

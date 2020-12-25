@@ -1,6 +1,6 @@
 import NewsletterClient from "../Bot";
 import { settings } from "../../botsettings";
-import { Collection, Message, MessageEmbed } from "discord.js";
+import { Collection, GuildMember, Message, MessageEmbed } from "discord.js";
 import { GoogleSpreadsheet, GoogleSpreadsheetRow } from "google-spreadsheet";
 import {
     SpreadsheetOrg,
@@ -95,10 +95,13 @@ export default class NewsletterService {
             this.client.logger.error(e);
         }
 
-        // build embed
+        // build org embeds
         const newsletter: MessageEmbed[] = orgWithEvents.map((data) =>
-            this.buildEventEmbed(data)
+            this.buildOrgEmbed(data)
         );
+
+        // build command list embed
+        newsletter.push(this.client.services.command.buildDMHelp());
 
         // send out
         let recieved: any = {};
@@ -123,17 +126,24 @@ export default class NewsletterService {
             }
 
             // send to the members
-            members.forEach((m) => {
+            members.forEach(async (m) => {
                 // to send to everyone (for prod), add an '!' before 'unsubscribed' in the line below
                 if (recieved[m.id] != true && unsubscribed.includes(m.id)) {
                     // ! For testing
-                    // newsletter.forEach((n) => m.send(n));
-                    console.log(
-                        "Would send newsletter to " +
-                            m.user.username +
-                            "#" +
-                            m.user.discriminator
-                    );
+                    // send the banner
+                    await m.send({
+                        files: [
+                            "https://media.discordapp.net/attachments/744488968338276436/791967343223767060/newsletter_banner.png",
+                        ],
+                    });
+
+                    newsletter.forEach((n) => m.send(n));
+                    // console.log(
+                    //     "Would send newsletter to " +
+                    //         m.user.username +
+                    //         "#" +
+                    //         m.user.discriminator
+                    // );
                     recieved[m.id] = true;
                 }
             });
@@ -141,7 +151,7 @@ export default class NewsletterService {
         this.schedule();
     }
 
-    public buildEventEmbed(data: OrgWithEvents): MessageEmbed {
+    public buildOrgEmbed(data: OrgWithEvents): MessageEmbed {
         const weekdays = [
             "Sunday",
             "Monday",
@@ -169,8 +179,7 @@ export default class NewsletterService {
 
         return new MessageEmbed({
             title: data.org.name,
-            description:
-                "\n- Respond with a number to RSVP for an event!\n\n- Respond with `unsubscribe` to unsubscribe from the ACM weekly newsletter.\n",
+            description: `${data.org.description}\n\n🎟 Respond with \`${settings.prefix}rsvp [number]\` to RSVP for an event!\n🚪 Respond with \`${settings.prefix}unsubscribe\` to unsubscribe from the ACM weekly newsletter.\n\n`,
             color: data.org.color,
             author: {
                 name: `${data.org.abbr}'s Weekly Newsletter`,
@@ -205,6 +214,37 @@ export default class NewsletterService {
     public buildHelpEmbed(): MessageEmbed {
         return new MessageEmbed({});
     }
+
+    public async remind({
+        eventID,
+        userID,
+        minutesBeforeStart,
+    }: {
+        eventID: string;
+        userID: string;
+        minutesBeforeStart: number;
+    }) {
+        const e = this.client.database.cache.events.get(eventID);
+        if (!e) return;
+
+        // we'll add more to this
+        const embed = new MessageEmbed();
+        embed.setTitle(
+            `\'${e.event.name}\' is starting in ${minutesBeforeStart} minutes!`
+        );
+        if (e.event.location) embed.addField("Location", e.event.location);
+
+        try {
+            var org = await this.client.spreadsheet.fetchOrg(e.abbr);
+            if (!org) return;
+
+            var user = await this.client.users.fetch(userID);
+            if (user) user.send(embed);
+        } catch (e) {
+            this.client.logger.error(e);
+        }
+    }
+
     // public async send() {
     //     // return; // disable newsletter for now
     //     console.log("Running newsletter.send() process!");
@@ -255,67 +295,67 @@ export default class NewsletterService {
      * Builds and returns an event embed for a single org.
      * @param orgAbbrev the org's abbreviation (i.e. name of sheet)
      */
-    public async buildOrgEmbed(orgAbbrev: any): Promise<MessageEmbed> {
-        // First things first: figure out if this org exists in our organization key
-        const orgMapping = await this.getOrgMapping();
-        // handle org not in org key
-        if (!orgMapping.has(orgAbbrev)) {
-            return new MessageEmbed({
-                description: `${orgAbbrev} isn't configured in the organization key`,
-                color: "RED",
-            });
-        }
-        const orgConfig = orgMapping.get(orgAbbrev)!;
+    // public async buildOrggEmbed(orgAbbrev: any): Promise<MessageEmbed> {
+    //     // First things first: figure out if this org exists in our organization key
+    //     const orgMapping = await this.getOrgMapping();
+    //     // handle org not in org key
+    //     if (!orgMapping.has(orgAbbrev)) {
+    //         return new MessageEmbed({
+    //             description: `${orgAbbrev} isn't configured in the organization key`,
+    //             color: "RED",
+    //         });
+    //     }
+    //     const orgConfig = orgMapping.get(orgAbbrev)!;
 
-        // now that it supposedly exists, lets pull the events from the corresponding google sheet
-        // note that this pulls only the next week of events.
-        const events = await this.fetchOrgEvents(orgAbbrev);
-        // handle the case where we can't find this org's sheet
-        if (events == undefined) {
-            return new MessageEmbed({
-                description: `A sheet for ${orgAbbrev} doesn't exist, even though it exists in the organization key!`,
-                color: "RED",
-            });
-        }
+    //     // now that it supposedly exists, lets pull the events from the corresponding google sheet
+    //     // note that this pulls only the next week of events.
+    //     const events = await this.fetchOrgEvents(orgAbbrev);
+    //     // handle the case where we can't find this org's sheet
+    //     if (events == undefined) {
+    //         return new MessageEmbed({
+    //             description: `A sheet for ${orgAbbrev} doesn't exist, even though it exists in the organization key!`,
+    //             color: "RED",
+    //         });
+    //     }
 
-        // At this point, we have our organization configuration and the events themselves.
+    //     // At this point, we have our organization configuration and the events themselves.
 
-        // split events into their divisions
-        const ed: any = {};
-        events.forEach(
-            (e) =>
-                (ed[e.division] = ed.hasOwnProperty(e.division)
-                    ? [...ed[e.division], e]
-                    : [e])
-        );
+    //     // split events into their divisions
+    //     const ed: any = {};
+    //     events.forEach(
+    //         (e) =>
+    //             (ed[e.division] = ed.hasOwnProperty(e.division)
+    //                 ? [...ed[e.division], e]
+    //                 : [e])
+    //     );
 
-        // make the actual embed
-        let orgEmbed = new MessageEmbed({
-            title: `📰 __${orgAbbrev}'s Weekly Newsletter__`,
-            description:
-                "\n- Respond with a number to RSVP for an event!\n\n- Respond with `unsubscribe` to unsubscribe from the ACM weekly newsletter.\n``",
-            author: {
-                name: orgConfig["Full Name"],
-                iconURL: orgConfig["Logo [URL]"],
-            },
-            color: 16738560,
-            footer: {
-                text: "Newsletter",
-            },
-            fields: Object.keys(ed).map((division: any) => {
-                let str = "";
-                ed[division].forEach(
-                    (e: Event) =>
-                        (str += `**${e.title}** on \`${
-                            e.date.toDateString().split(" ")[0]
-                        } @ ${this.formatAMPM(e.date)}\`\n`)
-                );
-                return { name: division, value: str, inline: false };
-            }),
-        });
+    //     // make the actual embed
+    //     let orgEmbed = new MessageEmbed({
+    //         title: `📰 __${orgAbbrev}'s Weekly Newsletter__`,
+    //         description:
+    //             "\n- Respond with a number to RSVP for an event!\n\n- Respond with `unsubscribe` to unsubscribe from the ACM weekly newsletter.\n``",
+    //         author: {
+    //             name: orgConfig["Full Name"],
+    //             iconURL: orgConfig["Logo [URL]"],
+    //         },
+    //         color: 16738560,
+    //         footer: {
+    //             text: "Newsletter",
+    //         },
+    //         fields: Object.keys(ed).map((division: any) => {
+    //             let str = "";
+    //             ed[division].forEach(
+    //                 (e: Event) =>
+    //                     (str += `**${e.title}** on \`${
+    //                         e.date.toDateString().split(" ")[0]
+    //                     } @ ${this.formatAMPM(e.date)}\`\n`)
+    //             );
+    //             return { name: division, value: str, inline: false };
+    //         }),
+    //     });
 
-        return orgEmbed;
-    }
+    //     return orgEmbed;
+    // }
 
     /**
      * Builds and returns an announcement embed for a particular org.
@@ -325,107 +365,107 @@ export default class NewsletterService {
     /**
      * Formats Date object into `HH:MM AM/PM`, in CST
      */
-    formatAMPM(date: Date): string {
-        const options = {
-            timeZone: "America/Chicago",
-            hour: "numeric",
-            minute: "numeric",
-        };
-        return date.toLocaleString("en-US", options);
-    }
+    // formatAMPM(date: Date): string {
+    //     const options = {
+    //         timeZone: "America/Chicago",
+    //         hour: "numeric",
+    //         minute: "numeric",
+    //     };
+    //     return date.toLocaleString("en-US", options);
+    // }
 
     /**
      * Returns events in the next week for the specified organization, or `undefined` if that sheet cannot be found.
      * @param orgAbbrev name of the sheet to look in
      */
-    async fetchOrgEvents(orgAbbrev: string): Promise<Event[] | undefined> {
-        const doc = await this.getDoc();
-        const sheet = doc.sheetsByIndex.find((s) => s.title == orgAbbrev);
+    // async fetchOrgEvents(orgAbbrev: string): Promise<Event[] | undefined> {
+    //     const doc = await this.getDoc();
+    //     const sheet = doc.sheetsByIndex.find((s) => s.title == orgAbbrev);
 
-        // return undefined if there is no sheet with the name in orgAbbrev
-        if (sheet == undefined) {
-            return undefined;
-        }
+    //     // return undefined if there is no sheet with the name in orgAbbrev
+    //     if (sheet == undefined) {
+    //         return undefined;
+    //     }
 
-        const rows = await sheet.getRows();
-        const validRows = rows.filter(
-            (row: any) =>
-                row["Start Time"] != undefined && row["Start Time"] != "TBA"
-        );
-        const allEvents: Event[] = validRows.map((row: any) => {
-            return {
-                title: row["Event Name"],
-                description: row["Event Description"],
-                division: row["Team/Division"],
-                room: row["Room"],
-                date: new Date(row.Date + " " + row["Start Time"]),
-            };
-        });
+    //     const rows = await sheet.getRows();
+    //     const validRows = rows.filter(
+    //         (row: any) =>
+    //             row["Start Time"] != undefined && row["Start Time"] != "TBA"
+    //     );
+    //     const allEvents: Event[] = validRows.map((row: any) => {
+    //         return {
+    //             title: row["Event Name"],
+    //             description: row["Event Description"],
+    //             division: row["Team/Division"],
+    //             room: row["Room"],
+    //             date: new Date(row.Date + " " + row["Start Time"]),
+    //         };
+    //     });
 
-        // filter for only events in the upcoming week
-        let today = new Date();
-        const events = allEvents.filter((e) => {
-            return (
-                e.date > today &&
-                e.date <
-                    new Date(
-                        today.getFullYear(),
-                        today.getMonth(),
-                        today.getDate() + 7
-                    )
-            );
-        });
+    //     // filter for only events in the upcoming week
+    //     let today = new Date();
+    //     const events = allEvents.filter((e) => {
+    //         return (
+    //             e.date > today &&
+    //             e.date <
+    //                 new Date(
+    //                     today.getFullYear(),
+    //                     today.getMonth(),
+    //                     today.getDate() + 7
+    //                 )
+    //         );
+    //     });
 
-        return events;
-    }
+    //     return events;
+    // }
 
     /**
      * Reads the organization key from Google Sheets and returns a Map of abbreviation -> config data
      */
-    async getOrgMapping(): Promise<Map<string, GoogleSpreadsheetRow>> {
-        const doc = await this.getDoc();
-        const sheet = doc.sheetsByIndex.find(
-            (s) => s.title == "Organization Key"
-        );
+    // async getOrgMapping(): Promise<Map<string, GoogleSpreadsheetRow>> {
+    //     const doc = await this.getDoc();
+    //     const sheet = doc.sheetsByIndex.find(
+    //         (s) => s.title == "Organization Key"
+    //     );
 
-        let res = new Map<string, GoogleSpreadsheetRow>();
+    //     let res = new Map<string, GoogleSpreadsheetRow>();
 
-        if (sheet == undefined) {
-            throw new Error('No sheet called "Organization Key"');
-        }
+    //     if (sheet == undefined) {
+    //         throw new Error('No sheet called "Organization Key"');
+    //     }
 
-        const rows = await sheet.getRows();
+    //     const rows = await sheet.getRows();
 
-        rows.forEach((row) => {
-            if (row["Abbr. Name [Same as sheet title]"] != undefined)
-                res.set(row["Abbr. Name [Same as sheet title]"], row);
-        });
+    //     rows.forEach((row) => {
+    //         if (row["Abbr. Name [Same as sheet title]"] != undefined)
+    //             res.set(row["Abbr. Name [Same as sheet title]"], row);
+    //     });
 
-        return res;
-    }
+    //     return res;
+    // }
 
     /**
      * Returns the Google Sheets document object for the events spreadsheet, with info loaded.
      */
-    async getDoc(): Promise<GoogleSpreadsheet> {
-        // don't bother re-retrieving the metadata if we recently retrieved it
-        if (
-            this.doc != undefined &&
-            new Date().getTime() - this.docCacheTime < this.docCacheThreshold
-        ) {
-            console.log(
-                "A cached version of the newsletter google sheets metadata was used"
-            );
-            return this.doc;
-        }
+    // async getDoc(): Promise<GoogleSpreadsheet> {
+    //     // don't bother re-retrieving the metadata if we recently retrieved it
+    //     if (
+    //         this.doc != undefined &&
+    //         new Date().getTime() - this.docCacheTime < this.docCacheThreshold
+    //     ) {
+    //         console.log(
+    //             "A cached version of the newsletter google sheets metadata was used"
+    //         );
+    //         return this.doc;
+    //     }
 
-        const doc = new GoogleSpreadsheet(this.spreadsheetId);
-        doc.useApiKey(settings.keys.sheets);
+    //     const doc = new GoogleSpreadsheet(this.spreadsheetId);
+    //     doc.useApiKey(settings.keys.sheets);
 
-        await doc.loadInfo();
-        this.doc = doc;
-        this.docCacheTime = new Date().getTime();
+    //     await doc.loadInfo();
+    //     this.doc = doc;
+    //     this.docCacheTime = new Date().getTime();
 
-        return doc;
-    }
+    //     return doc;
+    // }
 }

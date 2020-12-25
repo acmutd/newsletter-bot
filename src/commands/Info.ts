@@ -1,12 +1,14 @@
 import { Message, MessageEmbed } from "discord.js";
 import { settings } from "../botsettings";
 import Command, { CommandContext } from "../structures/Command";
+const isURL = require("isurl");
 
 export default class InfoCommand extends Command {
     constructor() {
         super({
             name: "info",
             description: "Display information about a particular event!",
+            usage: ["info [event number]"],
             dmWorks: true,
         });
     }
@@ -14,14 +16,41 @@ export default class InfoCommand extends Command {
     // TODO: Add invalid messages instead of empty returns
 
     public async exec({ msg, client, args }: CommandContext) {
-        if (!args[0]) return;
-        if (!parseInt(args[0])) return;
+        if (!args[0]) {
+            client.response.emit(
+                msg.channel,
+                `You need to add the appropriate arguments: \`${this.usage[0]}\``,
+                "invalid"
+            );
+            return;
+        }
+        if (!parseInt(args[0])) {
+            client.response.emit(
+                msg.channel,
+                `The first argument needs to be a number: \`${this.usage[0]}\``,
+                "invalid"
+            );
+            return;
+        }
 
         const e = client.database.cache.events.get(args[0]);
-        if (!e) return;
-
+        if (!e) {
+            client.response.emit(
+                msg.channel,
+                `There is no event associated with that number this week.`,
+                "invalid"
+            );
+            return;
+        }
         const org = await client.spreadsheet.fetchOrg(e.abbr);
-        if (!org) return;
+        if (!org) {
+            client.response.emit(
+                msg.channel,
+                `Could not find a corresponding org with this event.`,
+                "error"
+            );
+            return;
+        }
 
         const embed = new MessageEmbed({
             description: `🎟 To RSVP for this event, send the command \`${settings.prefix}rsvp ${e.event.id}\``,
@@ -69,6 +98,10 @@ export default class InfoCommand extends Command {
                 e.event.speakerContact,
                 true
             );
+
+        // check if poster url legit
+        if (isURL(new URL(e.event.posterUrl)))
+            embed.setImage(e.event.posterUrl);
 
         msg.channel.send(embed);
     }
