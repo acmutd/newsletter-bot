@@ -17,7 +17,7 @@ interface Event {
     date: Date;
 }
 
-interface OrgWithEvents {
+export interface OrgWithEvents {
     events: SpreadsheetEvent[];
     org: SpreadsheetOrg;
 }
@@ -104,7 +104,7 @@ export default class NewsletterService {
         newsletter.push(this.client.services.command.buildDMHelp());
 
         // send out
-        let recieved: any = {};
+        let received: Set<string> = new Set<string>();
 
         try {
             const u = await this.client.database.schemas.member.find();
@@ -128,7 +128,7 @@ export default class NewsletterService {
             // send to the members
             members.forEach(async (m) => {
                 // to send to everyone (for prod), add an '!' before 'unsubscribed' in the line below
-                if (recieved[m.id] != true && unsubscribed.includes(m.id)) {
+                if (received.has(m.id) != true && unsubscribed.includes(m.id)) {
                     // ! For testing
                     // send the banner
                     await m.send({
@@ -144,7 +144,7 @@ export default class NewsletterService {
                     //         "#" +
                     //         m.user.discriminator
                     // );
-                    recieved[m.id] = true;
+                    received.add(m.id);
                 }
             });
         }
