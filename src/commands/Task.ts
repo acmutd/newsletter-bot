@@ -35,94 +35,122 @@ export default class TaskCommand extends Command {
 
         switch (args[0].toLowerCase()) {
             case "list":
-                const tasks = client.scheduler.tasks;
-                let embed = {
-                    title: `${tasks.size} task${tasks.size != 1 ? "s" : ""}`,
-                    fields: [] as any[],
-                    footer: {},
-                };
-
-                let expiredCnt = 0;
-                for (const value of tasks.values()) {
-                    // NOTE THAT THIS RETURNS A CronDate. The typings are wrong.
-                    // See: https://github.com/node-schedule/node-schedule/issues/436
-                    const nextInvoke = value.job?.nextInvocation();
-
-                    if (nextInvoke) {
-                        const nextInvokeStr = (nextInvoke as any)
-                            .toDate()
-                            .toLocaleString("en-US", this.options);
-                        embed.fields.push({
-                            name: value.id,
-                            value: `Type: ${value.type}\nNext: ${nextInvokeStr}`,
-                        });
-                    } else {
-                        expiredCnt++;
-                    }
-                }
-
-                if (expiredCnt > 0) {
-                    embed["footer"] = {
-                        text: `${expiredCnt} task${
-                            expiredCnt != 1 ? "s" : ""
-                        } omitted because already expired`,
+                {
+                    const tasks = client.scheduler.tasks;
+                    let embed = {
+                        title: `${tasks.size} task${tasks.size != 1 ? "s" : ""}`,
+                        fields: [] as any[],
+                        footer: {},
                     };
-                }
 
-                return msg.channel.send({ embed });
+                    let expiredCnt = 0;
+                    for (const value of tasks.values()) {
+                        // NOTE THAT THIS RETURNS A CronDate. The typings are wrong.
+                        // See: https://github.com/node-schedule/node-schedule/issues/436
+                        const nextInvoke = value.job?.nextInvocation();
+
+                        if (nextInvoke) {
+                            const nextInvokeStr = (nextInvoke as any)
+                                .toDate()
+                                .toLocaleString("en-US", this.options);
+                            embed.fields.push({
+                                name: value.id,
+                                value: `Type: ${value.type}\nNext: ${nextInvokeStr}`,
+                            });
+                        } else {
+                            expiredCnt++;
+                        }
+                    }
+
+                    if (expiredCnt > 0) {
+                        embed["footer"] = {
+                            text: `${expiredCnt} task${expiredCnt != 1 ? "s" : ""
+                                } omitted because already expired`,
+                        };
+                    }
+
+                    return msg.channel.send({ embed });
+                }
 
             case "delay":
-                // literally all of this is validation and fetching stuff
-                if (args.length != 3) return this.sendInvalidUsage(msg, client);
+                {
+                    // literally all of this is validation and fetching stuff
+                    if (args.length != 3) return this.sendInvalidUsage(msg, client);
 
-                const id = args[1];
-                const mins = +args[2];
-                if (isNaN(mins)) return this.sendInvalidUsage(msg, client);
+                    const id = args[1];
+                    const mins = +args[2];
+                    if (isNaN(mins)) return this.sendInvalidUsage(msg, client);
 
-                const task = client.scheduler.getTask(id);
+                    const task = client.scheduler.getTask(id);
 
-                if (task == undefined) {
-                    return client.response.emit(
-                        msg.channel,
-                        "A task with that ID could not be found!",
-                        "invalid"
-                    );
-                }
+                    if (task == undefined) {
+                        return client.response.emit(
+                            msg.channel,
+                            `A task with ID '${id}' could not be found!`,
+                            "invalid"
+                        );
+                    }
 
-                const nextInvokeCronDate = task.job?.nextInvocation();
+                    const nextInvokeCronDate = task.job?.nextInvocation();
 
-                if (!nextInvokeCronDate) {
-                    return client.response.emit(
-                        msg.channel,
-                        "This task has already expired.",
-                        "invalid"
-                    );
-                }
+                    if (!nextInvokeCronDate) {
+                        return client.response.emit(
+                            msg.channel,
+                            "This task has already expired.",
+                            "invalid"
+                        );
+                    }
 
-                // OKAY validation is done, calculate new date
-                const delayedInvoke = new Date(
-                    (nextInvokeCronDate as any).toDate().getTime() +
+                    // OKAY validation is done, calculate new date
+                    const delayedInvoke = new Date(
+                        (nextInvokeCronDate as any).toDate().getTime() +
                         mins * 60 * 1000
-                );
-                task.cron = delayedInvoke;
+                    );
+                    task.cron = delayedInvoke;
 
-                console.log(delayedInvoke);
-                console.log(nextInvokeCronDate);
+                    // remove the old one
+                    await client.scheduler.deleteTask(id);
 
-                // remove the old one
-                await client.scheduler.deleteTask(id);
+                    // add it with the new time, same ID
+                    await client.scheduler.createTask(task);
 
-                // add it with the new time, same ID
-                await client.scheduler.createTask(task);
+                    return client.response.emit(
+                        msg.channel,
+                        `Task updated! New trigger time is ${delayedInvoke.toLocaleString(
+                            "en-US",
+                            this.options
+                        )}`,
+                        "success"
+                    );
+                }
 
-                return client.response.emit(
-                    msg.channel,
-                    `Task updated! New trigger time is ${delayedInvoke.toLocaleString(
-                        "en-US",
-                        this.options
-                    )}`,
-                    "success"
-                );
+            case 'run':
+                {
+                    if (args.length != 2) return this.sendInvalidUsage(msg, client);
+
+                    const id = args[1];
+                    const task = client.scheduler.getTask(id);
+
+                    if (task == undefined) {
+                        return client.response.emit(
+                            msg.channel,
+                            `A task with ID '${id}' could not be found!`,
+                            "invalid"
+                        );
+                    }
+
+                    const runMsg = await msg.channel.send('Your task is running...');
+                    
+                    const startTime = new Date().getTime();
+                    await client.scheduler.runTask(task);
+
+                    runMsg.delete();
+                    return client.response.emit(
+                        msg.channel,
+                        `Task completed in ${(new Date().getTime() - startTime) / 1000} seconds.`,
+                        "success"
+                    );
+                }
 
             default:
                 return this.sendInvalidUsage(msg, client);
