@@ -21,6 +21,7 @@ export interface SpreadsheetEvent {
 }
 
 export interface SpreadsheetOrg {
+    localId: string;
     abbr: string;
     name: string;
     description?: string;
@@ -58,6 +59,11 @@ export default class SpreadsheetManager {
     // methods to abstract fetching data from the spreadsheet
     // all methods start with .loadInfo() to get the latest data
 
+    /**
+     * Fetches an org, case insensitive.
+     * @param org Case insensitive string representing org abbreviation, or number representing org index in Google Sheet.
+     * @param recache Whether or not to force recache. If set to false, it will recache automatically after a recache timeout.
+     */
     public async fetchOrg(
         org: OrgResolvable,
         recache?: boolean
@@ -81,7 +87,7 @@ export default class SpreadsheetManager {
         // if abbr
         else {
             return this.rowToOrg(
-                rows.find((row) => this.rowToOrg(row).abbr == org)
+                rows.find((row) => this.rowToOrg(row).localId == org.toLowerCase())
             );
         }
     }
@@ -97,11 +103,16 @@ export default class SpreadsheetManager {
         const rows = await sheet.getRows();
         return rows.map((row) => {
             const org = this.rowToOrg(row);
-            this.orgs.set(org.abbr, org);
+            this.orgs.set(org.localId, org);
             return org;
         });
     }
 
+    /**
+     * Fetches an org's events from Google Sheets, CASE SENSITIVE, using it's abbreviation. TODO: make this case insensitive.
+     * @param org Case sensitive string representing org abbreviation, or number representing org index in Google Sheet.
+     * @param days Fetch events up to a certain number of days after today.
+     */
     public async fetchEvents(
         org: OrgResolvable,
         days: number
@@ -133,7 +144,8 @@ export default class SpreadsheetManager {
     // Helper functions (should be static but idfl writing out SpreadsheetManager every time)
     private rowToOrg(row: any): SpreadsheetOrg {
         return {
-            abbr: row["Abbr. Name [Same as sheet title]"].toLowerCase(),
+            localId: row["Abbr. Name [Same as sheet title]"].toLowerCase(),
+            abbr: row["Abbr. Name [Same as sheet title]"],
             name: row["Full Name"],
             description: row["Description"],
             guild: row["Guild ID"],

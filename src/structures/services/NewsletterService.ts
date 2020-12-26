@@ -65,6 +65,8 @@ export default class NewsletterService {
         const orgWithEvents: OrgWithEvents[] = [];
         let eventsToDB: EventData[] = [];
         let count = 1;
+
+        
         for (const org of this.client.spreadsheet.orgs.array()) {
             let events = await this.client.spreadsheet.fetchEvents(org.abbr, 7);
 
@@ -98,9 +100,9 @@ export default class NewsletterService {
         // build org embeds
         const newsletter: (
             | MessageEmbed
-            | { abbr: string; embed: MessageEmbed }
+            | { localId: string; embed: MessageEmbed }
         )[] = orgWithEvents.map((data) => {
-            return { abbr: data.org.abbr, embed: this.buildOrgEmbed(data) };
+            return { localId: data.org.localId, embed: this.buildOrgEmbed(data) };
         });
 
         // build command list embed
@@ -108,18 +110,19 @@ export default class NewsletterService {
 
         // send out
         let received: Set<string> = new Set<string>();
+        let users: Map<string, any> = new Map<string, any>();
 
         try {
-            var users: any = {};
             const u = await this.client.database.schemas.member.find({});
             u.forEach(
-                (m) =>
-                    (users[m["_id"]] = {
+                (m) => (
+                    users.set(m["_id"], {
                         subscribed: m.preferences.subscribed,
                         unfollowed: m.preferences.unfollowed
                             ? [...m.preferences.unfollowed]
                             : [],
                     })
+                )
             );
         } catch (e) {
             this.client.logger.error(e);
@@ -141,8 +144,9 @@ export default class NewsletterService {
             members.forEach(async (m) => {
                 // to send to everyone (for prod), add an '!' before 'unsubscribed' in the line below
                 if (
-                    received.has(m.id) != true &&
-                    !users[m.id].subscribed &&
+                    !received.has(m.id) &&
+                    //users.has(m.id) ? users.get(m.id).subscribed : true &&  // defaults to send if user preference not set.
+                    users.has(m.id) ? users.get(m.id).subscribed : false && // defaults to do not send if user preference not set
                     !m.user.bot
                 ) {
                     // ! For testing
@@ -154,10 +158,10 @@ export default class NewsletterService {
                     });
 
                     newsletter.forEach((n) => {
-                        if (!(n instanceof MessageEmbed) && n.abbr) {
-                            if (!users[m.id].unfollowed.includes(n.abbr))
+                        if (!(n instanceof MessageEmbed) && n.localId) {            // if this is an org-related embed
+                            if (!users.get(m.id).unfollowed.includes(n.localId))    //  if user is not unfollowed from this org
                                 m.send(n);
-                        } else m.send(n);
+                        } else m.send(n);                                           // else, i.e. if this is NOT an org-related embed.
                     });
                     // console.log(
                     //     "Would send newsletter to " +
@@ -200,7 +204,9 @@ export default class NewsletterService {
 
         return new MessageEmbed({
             title: data.org.name,
-            description: `${data.org.description}\n\n🎟 Respond with \`${settings.prefix}rsvp [number]\` to RSVP for an event!\n🚪 Respond with \`${settings.prefix}unsubscribe\` to unsubscribe from the ACM weekly newsletter.\n\n`,
+            description: `${data.org.description}\n\n` +
+                `🎟 Respond with \`${settings.prefix}rsvp [number]\` to RSVP for an event!\n` +
+                `🚪 Respond with \`${settings.prefix}unsubscribe\` to unsubscribe from the ${data.org.abbr} weekly newsletter.\n\n`,
             color: data.org.color,
             author: {
                 name: `${data.org.abbr}'s Weekly Newsletter`,
