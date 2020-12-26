@@ -69,7 +69,7 @@ export default class SpreadsheetManager {
             !recache
         ) {
             if (typeof org == "number") return this.orgs.array()[org];
-            else return this.orgs.get(org);
+            else return this.orgs.get(org.toLowerCase());
         }
         // recache otherwise
         await this.spreadsheet.loadInfo();
@@ -133,7 +133,7 @@ export default class SpreadsheetManager {
     // Helper functions (should be static but idfl writing out SpreadsheetManager every time)
     private rowToOrg(row: any): SpreadsheetOrg {
         return {
-            abbr: row["Abbr. Name [Same as sheet title]"],
+            abbr: row["Abbr. Name [Same as sheet title]"].toLowerCase(),
             name: row["Full Name"],
             description: row["Description"],
             guild: row["Guild ID"],

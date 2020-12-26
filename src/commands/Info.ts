@@ -1,7 +1,7 @@
 import { Message, MessageEmbed } from "discord.js";
 import { settings } from "../botsettings";
 import Command, { CommandContext } from "../structures/Command";
-const isURL = require("isurl");
+const isUrl = require("is-url");
 
 export default class InfoCommand extends Command {
     constructor() {
@@ -100,8 +100,7 @@ export default class InfoCommand extends Command {
             );
 
         // check if poster url legit
-        if (isURL(new URL(e.event.posterUrl)))
-            embed.setImage(e.event.posterUrl);
+        if (isUrl(e.event.posterUrl)) embed.setImage(e.event.posterUrl);
 
         msg.channel.send(embed);
     }

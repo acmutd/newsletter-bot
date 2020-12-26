@@ -96,9 +96,12 @@ export default class NewsletterService {
         }
 
         // build org embeds
-        const newsletter: MessageEmbed[] = orgWithEvents.map((data) =>
-            this.buildOrgEmbed(data)
-        );
+        const newsletter: (
+            | MessageEmbed
+            | { abbr: string; embed: MessageEmbed }
+        )[] = orgWithEvents.map((data) => {
+            return { abbr: data.org.abbr, embed: this.buildOrgEmbed(data) };
+        });
 
         // build command list embed
         newsletter.push(this.client.services.command.buildDMHelp());
@@ -107,10 +110,17 @@ export default class NewsletterService {
         let received: Set<string> = new Set<string>();
 
         try {
-            const u = await this.client.database.schemas.member.find({
-                "preferences.subscribed": false,
-            });
-            var unsubscribed = u.map((m) => m["_id"]);
+            var users: any = {};
+            const u = await this.client.database.schemas.member.find({});
+            u.forEach(
+                (m) =>
+                    (users[m["_id"]] = {
+                        subscribed: m.preferences.subscribed,
+                        unfollowed: m.preferences.unfollowed
+                            ? [...m.preferences.unfollowed]
+                            : [],
+                    })
+            );
         } catch (e) {
             this.client.logger.error(e);
         }
@@ -132,7 +142,7 @@ export default class NewsletterService {
                 // to send to everyone (for prod), add an '!' before 'unsubscribed' in the line below
                 if (
                     received.has(m.id) != true &&
-                    unsubscribed.includes(m.id) &&
+                    !users[m.id].subscribed &&
                     !m.user.bot
                 ) {
                     // ! For testing
@@ -143,7 +153,12 @@ export default class NewsletterService {
                         ],
                     });
 
-                    newsletter.forEach((n) => m.send(n));
+                    newsletter.forEach((n) => {
+                        if (!(n instanceof MessageEmbed) && n.abbr) {
+                            if (!users[m.id].unfollowed.includes(n.abbr))
+                                m.send(n);
+                        } else m.send(n);
+                    });
                     // console.log(
                     //     "Would send newsletter to " +
                     //         m.user.username +
