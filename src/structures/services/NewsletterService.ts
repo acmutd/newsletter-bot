@@ -107,7 +107,9 @@ export default class NewsletterService {
         let received: Set<string> = new Set<string>();
 
         try {
-            const u = await this.client.database.schemas.member.find();
+            const u = await this.client.database.schemas.member.find({
+                "preferences.subscribed": false,
+            });
             var unsubscribed = u.map((m) => m["_id"]);
         } catch (e) {
             this.client.logger.error(e);
@@ -128,7 +130,11 @@ export default class NewsletterService {
             // send to the members
             members.forEach(async (m) => {
                 // to send to everyone (for prod), add an '!' before 'unsubscribed' in the line below
-                if (received.has(m.id) != true && unsubscribed.includes(m.id)) {
+                if (
+                    received.has(m.id) != true &&
+                    unsubscribed.includes(m.id) &&
+                    !m.user.bot
+                ) {
                     // ! For testing
                     // send the banner
                     await m.send({

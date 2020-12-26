@@ -6,6 +6,7 @@ export interface iMember extends Document {
     lastStrike: Date;
     preferences: {
         subscribed: boolean;
+        unfollowed: string[];
     };
 }
 
@@ -15,6 +16,7 @@ const memberSchema = new Schema({
     lastStrike: Date,
     preferences: {
         subscribed: Boolean,
+        unfollowed: Array,
     },
 });
 
