@@ -14,23 +14,10 @@ export default class FollowCommand extends Command {
 
     public async exec({ msg, client, args }: CommandContext) {
         if (!args[0]) {
-            client.response.emit(
-                msg.channel,
-                `You need to add the appropriate arguments: \`${this.usage[0]}\``,
-                "invalid"
-            );
-            return;
-        }
-        if (!parseInt(args[0])) {
-            client.response.emit(
-                msg.channel,
-                `The first argument needs to be a number: \`${this.usage[0]}\``,
-                "invalid"
-            );
-            return;
+            return this.sendInvalidUsage(msg, client);
         }
 
-        const org = await client.spreadsheet.fetchOrg(args[0].toLowerCase());
+        const org = await client.spreadsheet.fetchOrg(args[0]);
         if (!org) {
             client.response.emit(
                 msg.channel,
@@ -43,20 +30,20 @@ export default class FollowCommand extends Command {
         client.database.schemas.member
             .update(
                 { _id: msg.author.id },
-                { $pull: { "preferences.unfollowed": args[0].toLowerCase() } },
+                { $pull: { "preferences.unfollowed": org.localId } },
                 { upsert: true }
             )
             .then(() => {
                 client.response.emit(
                     msg.channel,
-                    `Successfully followed the ${args[0].toUpperCase()} org!\``,
+                    `Successfully followed \`${org.abbr}!\``,
                     "success"
                 );
             })
             .catch(() => {
                 client.response.emit(
                     msg.channel,
-                    `Was unable to follow the ${args[0].toUpperCase()} org. Contact developers on the ACM server.\``,
+                    `Was unable to follow ${org.abbr}. Contact developers on the ACM server.\``,
                     "error"
                 );
             });

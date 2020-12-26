@@ -31,8 +31,6 @@ export default class PreviewCommand extends Command {
 
         const org = client.spreadsheet.orgs.array().find((org) => org.abbr.toLowerCase() == args[0].toLowerCase())
 
-        //console.log(JSON.stringify(client.spreadsheet.orgs.array(), null, 2))
-
         // error and return if org doesn't exist in the org key (sheet 0)
         if (org == undefined) {
             await client.response.emit(
@@ -62,13 +60,12 @@ export default class PreviewCommand extends Command {
         
         const embed = client.services.newsletter.buildOrgEmbed(orgWithEvents)
 
-
         msg.channel.send(embed);
 
         msg.channel.send(
             new MessageEmbed({
                 color: '#EEEEEE',
-                description: 'Please **DO NOT RSVP** based on these event numbers. This is purely a preview.',
+                description: 'This is just a preview. Please **DO NOT RSVP** based on these event numbers.',
                 footer: {
                     text: `Preview generated in ${
                         (new Date().getTime() - startTime) / 1000

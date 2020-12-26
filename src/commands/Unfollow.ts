@@ -14,23 +14,10 @@ export default class UnfollowCommand extends Command {
 
     public async exec({ msg, client, args }: CommandContext) {
         if (!args[0]) {
-            client.response.emit(
-                msg.channel,
-                `You need to add the appropriate arguments: \`${this.usage[0]}\``,
-                "invalid"
-            );
-            return;
-        }
-        if (!parseInt(args[0])) {
-            client.response.emit(
-                msg.channel,
-                `The first argument needs to be a number: \`${this.usage[0]}\``,
-                "invalid"
-            );
-            return;
+            return this.sendInvalidUsage(msg, client);
         }
 
-        const org = await client.spreadsheet.fetchOrg(args[0].toLowerCase());
+        const org = await client.spreadsheet.fetchOrg(args[0]);
         if (!org) {
             client.response.emit(
                 msg.channel,
@@ -45,7 +32,7 @@ export default class UnfollowCommand extends Command {
                 { _id: msg.author.id },
                 {
                     $addToSet: {
-                        "preferences.unfollowed": args[0].toLowerCase(),
+                        "preferences.unfollowed": org.localId,
                     },
                 },
                 { upsert: true }
@@ -53,14 +40,14 @@ export default class UnfollowCommand extends Command {
             .then(() => {
                 client.response.emit(
                     msg.channel,
-                    `Successfully unfollowed the ${args[0].toUpperCase()} org!\``,
+                    `Successfully unfollowed \`${org.abbr}!\``,
                     "success"
                 );
             })
             .catch(() => {
                 client.response.emit(
                     msg.channel,
-                    `Was unable to unfollow the ${args[0].toUpperCase()} org. Contact developers on the ACM server.\``,
+                    `Was unable to unfollow ${org.abbr}. Contact developers on the ACM server.\``,
                     "error"
                 );
             });

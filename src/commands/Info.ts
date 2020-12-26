@@ -42,7 +42,7 @@ export default class InfoCommand extends Command {
             );
             return;
         }
-        const org = await client.spreadsheet.fetchOrg(e.abbr);
+        const org = await client.spreadsheet.fetchOrg(e.abbr.toLowerCase());
         if (!org) {
             client.response.emit(
                 msg.channel,
