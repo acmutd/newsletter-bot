@@ -92,11 +92,12 @@ export default class ScheduleManager {
      * Cancels a task and deletes it from memory and database
      */
     public async deleteTask(id: string): Promise<boolean> {
-        if (!this.getTask(id)) return false;
+        const task = this.getTask(id);
+        if (!task) return false;
 
-        this.tasks.get(id)?.job?.cancel(); // cancel the job in the task
-        this.tasks.delete(id); // remove the task itself
-        await this.client.database.schemas.task.findByIdAndDelete(id); // remove from database
+        task.job?.cancel(); // cancel the job in the task
+        this.tasks.delete(id); // remove the task itself from our task list
+        await this.client.database.schemas.task.deleteOne({ _id: id }); // remove from database
 
         return true;
     }
@@ -112,22 +113,13 @@ export default class ScheduleManager {
     /**
      * Callback function that is scheduled and directs control back to the appropriate manager
      */
-    private async runTask(task: Task) {
-        // remove from list
-        if (task.id) this.tasks.delete(task.id);
-
-        // remove from DB
-        await this.client.database.schemas.task.deleteOne({ _id: task.id });
-
-        // end job
-        if (task.job) {
-            task.job.cancel();
-        }
+    public async runTask(task: Task) {
+        // remove the task from all records
+        await this.deleteTask(task.id!);
 
         switch (task.type) {
             case "newsletter":
-                // example: this.client.newsletter.sendLetter();
-                this.client.services.newsletter.send();
+                await this.client.services.newsletter.send();
                 break;
             case "reminder":
                 // FOR TESTING
@@ -142,17 +134,6 @@ export default class ScheduleManager {
                 break;
         }
 
-        // note from eric: use this.deleteTask instead? See below line.
-        await this.deleteTask(task.id!);
-        /*
-        // remove from DB
-        await this.client.database.schemas.task.remove({ _id: task.id });
-
-        // end job
-        if (task.job) {
-            task.job.cancel();
-        }
-        */
     }
 }
 
