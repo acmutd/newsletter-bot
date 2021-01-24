@@ -1,6 +1,12 @@
 import NewsletterClient from "../Bot";
 import { settings } from "../../botsettings";
-import { Collection, GuildMember, Message, MessageEmbed } from "discord.js";
+import {
+    Collection,
+    GuildMember,
+    Message,
+    MessageAdditions,
+    MessageEmbed,
+} from "discord.js";
 import { GoogleSpreadsheet, GoogleSpreadsheetRow } from "google-spreadsheet";
 import {
     SpreadsheetOrg,
@@ -15,6 +21,11 @@ interface Event {
     division: string;
     room: string;
     date: Date;
+}
+
+interface OrgMessage {
+    orgAbbr: string;
+    msg: Message;
 }
 
 export interface OrgWithEvents {
@@ -61,10 +72,10 @@ export default class NewsletterService {
         // recache
         await this.client.spreadsheet.fetchAllOrgs();
 
-        // get org events-
-        const orgWithEvents: OrgWithEvents[] = [];
-        let eventsToDB: EventData[] = [];
-        let count = 1;
+        // get org events
+        const orgWithEvents: OrgWithEvents[] = []; // Array of org + events
+        let eventsToDB: EventData[] = []; // Array of events indexed by rsvp number
+        let count = 1; // Tracks the current rsvp number
 
         for (const org of this.client.spreadsheet.orgs.array()) {
             let events = await this.client.spreadsheet.fetchEvents(org.abbr, 7);
@@ -96,24 +107,29 @@ export default class NewsletterService {
             this.client.logger.error(e);
         }
 
-        // build org embeds
+        // initialize newsletter as an array of messages after the banner
         const newsletter: (
             | MessageEmbed
-            | { localId: string; embed: MessageEmbed }
-        )[] = orgWithEvents.map((data) => {
-            return {
+            | { localId: string; abbr: string; embed: MessageEmbed }
+        )[] = [];
+
+        // add org embeds
+        orgWithEvents.forEach((data) => {
+            newsletter.push({
                 localId: data.org.localId,
+                abbr: data.org.abbr,
                 embed: this.buildOrgEmbed(data),
-            };
+            });
         });
 
-        // build command list embed
+        // add command list embed
         newsletter.push(this.client.services.command.buildDMHelp());
 
-        // send out
-        let received: Set<string> = new Set<string>();
-        let users: Map<string, any> = new Map<string, any>();
+        // everything has been built, time to send out
+        const received: Set<string> = new Set<string>(); // set of userIDs, tracked to prevent double-sending to the same user
+        const users: Map<string, any> = new Map<string, any>(); // map of userID -> subscription & follow preferences from the DB
 
+        // build `users`
         try {
             const u = await this.client.database.schemas.member.find({});
             u.forEach((m) =>
@@ -142,7 +158,7 @@ export default class NewsletterService {
 
             // send to the members
             members.forEach(async (m) => {
-                // to send to everyone (for prod), add an '!' before 'unsubscribed' in the line below
+                // comment out one of the lines below, depending on whether to send the newsletter to people with unknown preference
                 if (
                     !received.has(m.id) &&
                     //users.has(m.id) ? users.get(m.id).subscribed : true &&  // defaults to send if user preference not set.
@@ -151,7 +167,9 @@ export default class NewsletterService {
                         : false && // defaults to do not send if user preference not set
                           !m.user.bot
                 ) {
-                    // ! For testing
+                    received.add(m.id);
+                    let tocData: OrgMessage[] = [];
+
                     // send the banner
                     await m.send({
                         files: [
@@ -159,21 +177,32 @@ export default class NewsletterService {
                         ],
                     });
 
-                    newsletter.forEach((n) => {
+                    // send the rest of the newsletter, one message at a time.
+                    for (const n of newsletter) {
                         if (!(n instanceof MessageEmbed) && n.localId) {
                             // if this is an org-related embed
-                            if (!users.get(m.id).unfollowed.includes(n.localId))
+                            if (
+                                !users.get(m.id).unfollowed.includes(n.localId)
+                            ) {
                                 //  if user is not unfollowed from this org
-                                m.send(n);
-                        } else m.send(n); // else, i.e. if this is NOT an org-related embed.
-                    });
+                                const msg = await m.send(n);
+                                // track message in the table of contents
+                                tocData.push({
+                                    orgAbbr: n.abbr,
+                                    msg,
+                                });
+                            }
+                        } else await m.send(n);
+                    }
+
+                    await m.send(this.buildTOC(tocData));
+
                     // console.log(
                     //     "Would send newsletter to " +
                     //         m.user.username +
                     //         "#" +
                     //         m.user.discriminator
                     // );
-                    received.add(m.id);
                 }
             });
         }
@@ -240,6 +269,15 @@ export default class NewsletterService {
             }),
             thumbnail: { url: data.org.logo },
             url: data.org.website,
+        });
+    }
+
+    private buildTOC(tocData: OrgMessage[]): MessageEmbed {
+        return new MessageEmbed({
+            title: "Newsletter Table of Contents",
+            description: tocData
+                .map((x, i) => `${i + 1}. [${x.orgAbbr}](${x.msg.url})`)
+                .join("\n"),
         });
     }
 
