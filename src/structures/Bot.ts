@@ -88,7 +88,7 @@ export default class NewsletterClient extends Client {
         //     console.error(e);
         // })
 
-        //this.services.newsletter.send();
+        this.services.newsletter.send();
 
         await this.login(this.config.token);
     }

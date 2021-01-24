@@ -12,11 +12,9 @@ export default class UnsubscribeCommand extends Command {
         });
     }
 
-    // TODO: Add invalid messages instead of empty returns
-
     public async exec({ msg, client, args }: CommandContext) {
         client.database.schemas.member
-            .update(
+            .updateOne(
                 { _id: msg.author.id },
                 { "preferences.subscribed": false },
                 { upsert: true }

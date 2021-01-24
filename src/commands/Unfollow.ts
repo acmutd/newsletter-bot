@@ -28,7 +28,7 @@ export default class UnfollowCommand extends Command {
         }
 
         client.database.schemas.member
-            .update(
+            .updateOne(
                 { _id: msg.author.id },
                 {
                     $addToSet: {

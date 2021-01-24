@@ -1,9 +1,7 @@
 import { MessageEmbed } from "discord.js";
 import Command, { CommandContext } from "../structures/Command";
 import { SpreadsheetEvent } from "../structures/managers/SpreadsheetManager";
-import { OrgWithEvents } from "../structures/services/NewsletterService"
-
-
+import { OrgWithEvents } from "../structures/services/NewsletterService";
 
 export default class PreviewCommand extends Command {
     constructor() {
@@ -29,7 +27,9 @@ export default class PreviewCommand extends Command {
         // re-cache
         await client.spreadsheet.fetchAllOrgs();
 
-        const org = client.spreadsheet.orgs.array().find((org) => org.abbr.toLowerCase() == args[0].toLowerCase())
+        const org = client.spreadsheet.orgs
+            .array()
+            .find((org) => org.abbr.toLowerCase() == args[0].toLowerCase());
 
         // error and return if org doesn't exist in the org key (sheet 0)
         if (org == undefined) {
@@ -40,39 +40,21 @@ export default class PreviewCommand extends Command {
             return;
         }
 
-        let events = await client.spreadsheet.fetchEvents(org.abbr, 7);
+        let events = client.database.cache.events
+            .filter((o) => o.abbr == org.abbr)
+            .map((d) => d.event);
 
         if (events.length < 1) {
             await client.response.emit(
                 msg.channel,
                 `No events were found for \`${args[0]}\` in the upcoming week.`
-            )
+            );
         }
 
-
-        var addedID: SpreadsheetEvent[] = [];
-        events.forEach((e, count) => {
-            addedID.push({ ...e, id: count+1 });
-        });
-
-        events = [...addedID];
         const orgWithEvents: OrgWithEvents = { events, org };
-        
-        const embed = client.services.newsletter.buildOrgEmbed(orgWithEvents)
+
+        const embed = client.services.newsletter.buildOrgEmbed(orgWithEvents);
 
         msg.channel.send(embed);
-
-        msg.channel.send(
-            new MessageEmbed({
-                color: '#EEEEEE',
-                description: 'This is just a preview. Please **DO NOT RSVP** based on these event numbers.',
-                footer: {
-                    text: `Preview generated in ${
-                        (new Date().getTime() - startTime) / 1000
-                    } seconds.`
-                }
-            })
-            
-        );
     }
 }

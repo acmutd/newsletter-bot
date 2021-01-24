@@ -61,12 +61,11 @@ export default class NewsletterService {
         // recache
         await this.client.spreadsheet.fetchAllOrgs();
 
-        // get org events
+        // get org events-
         const orgWithEvents: OrgWithEvents[] = [];
         let eventsToDB: EventData[] = [];
         let count = 1;
 
-        
         for (const org of this.client.spreadsheet.orgs.array()) {
             let events = await this.client.spreadsheet.fetchEvents(org.abbr, 7);
 
@@ -102,7 +101,10 @@ export default class NewsletterService {
             | MessageEmbed
             | { localId: string; embed: MessageEmbed }
         )[] = orgWithEvents.map((data) => {
-            return { localId: data.org.localId, embed: this.buildOrgEmbed(data) };
+            return {
+                localId: data.org.localId,
+                embed: this.buildOrgEmbed(data),
+            };
         });
 
         // build command list embed
@@ -114,15 +116,13 @@ export default class NewsletterService {
 
         try {
             const u = await this.client.database.schemas.member.find({});
-            u.forEach(
-                (m) => (
-                    users.set(m["_id"], {
-                        subscribed: m.preferences.subscribed,
-                        unfollowed: m.preferences.unfollowed
-                            ? [...m.preferences.unfollowed]
-                            : [],
-                    })
-                )
+            u.forEach((m) =>
+                users.set(m["_id"], {
+                    subscribed: m.preferences.subscribed,
+                    unfollowed: m.preferences.unfollowed
+                        ? [...m.preferences.unfollowed]
+                        : [],
+                })
             );
         } catch (e) {
             this.client.logger.error(e);
@@ -146,8 +146,10 @@ export default class NewsletterService {
                 if (
                     !received.has(m.id) &&
                     //users.has(m.id) ? users.get(m.id).subscribed : true &&  // defaults to send if user preference not set.
-                    users.has(m.id) ? users.get(m.id).subscribed : false && // defaults to do not send if user preference not set
-                    !m.user.bot
+                    users.has(m.id)
+                        ? users.get(m.id).subscribed
+                        : false && // defaults to do not send if user preference not set
+                          !m.user.bot
                 ) {
                     // ! For testing
                     // send the banner
@@ -158,10 +160,12 @@ export default class NewsletterService {
                     });
 
                     newsletter.forEach((n) => {
-                        if (!(n instanceof MessageEmbed) && n.localId) {            // if this is an org-related embed
-                            if (!users.get(m.id).unfollowed.includes(n.localId))    //  if user is not unfollowed from this org
+                        if (!(n instanceof MessageEmbed) && n.localId) {
+                            // if this is an org-related embed
+                            if (!users.get(m.id).unfollowed.includes(n.localId))
+                                //  if user is not unfollowed from this org
                                 m.send(n);
-                        } else m.send(n);                                           // else, i.e. if this is NOT an org-related embed.
+                        } else m.send(n); // else, i.e. if this is NOT an org-related embed.
                     });
                     // console.log(
                     //     "Would send newsletter to " +
@@ -204,7 +208,8 @@ export default class NewsletterService {
 
         return new MessageEmbed({
             title: data.org.name,
-            description: `${data.org.description}\n\n` +
+            description:
+                `${data.org.description}\n\n` +
                 `🎟 Respond with \`${settings.prefix}rsvp [number]\` to RSVP for an event!\n` +
                 `🚪 Respond with \`${settings.prefix}unsubscribe\` to unsubscribe from the ${data.org.abbr} weekly newsletter.\n\n`,
             color: data.org.color,
@@ -236,10 +241,6 @@ export default class NewsletterService {
             thumbnail: { url: data.org.logo },
             url: data.org.website,
         });
-    }
-
-    public buildHelpEmbed(): MessageEmbed {
-        return new MessageEmbed({});
     }
 
     public async remind({

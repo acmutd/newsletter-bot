@@ -19,79 +19,81 @@ export default class HelpCommand extends Command {
     }
 
     public async exec({ msg, client, args }: CommandContext) {
-        switch (args.length) {
-            case 0:
-                // 0 args, list commands
-                let commandsEmbed = {
-                    color: "#F67B21",
-                    title: "Commands",
-                    description: "",
-                    fields: [] as any[],
-                    footer: {
-                        text: "[num] commands available to you",
-                    },
-                };
+        msg.channel.send(client.services.command.buildDMHelp());
 
-                // build fields
-                for (const cmd of client.manager.commands.values())
-                    if (!client.services.command.cantInvoke(msg, cmd))
-                        commandsEmbed.fields.push({
-                            name: cmd.name,
-                            value: cmd.description,
-                        });
+        // switch (args.length) {
+        //     case 0:
+        //         // 0 args, list commands
+        //         let commandsEmbed = {
+        //             color: "#F67B21",
+        //             title: "Commands",
+        //             description: "",
+        //             fields: [] as any[],
+        //             footer: {
+        //                 text: "[num] commands available to you",
+        //             },
+        //         };
 
-                // set footer telling user how many commands are accessible in this place, to them
-                const cmdsAvailable = commandsEmbed.fields.length;
-                commandsEmbed.footer.text = `${cmdsAvailable} command${
-                    cmdsAvailable != 1 ? "s" : ""
-                } available.`;
+        //         // build fields
+        //         for (const cmd of client.manager.commands.values())
+        //             if (!client.services.command.cantInvoke(msg, cmd))
+        //                 commandsEmbed.fields.push({
+        //                     name: cmd.name,
+        //                     value: cmd.description,
+        //                 });
 
-                // send the embed!
-                await msg.channel.send({ embed: commandsEmbed });
+        //         // set footer telling user how many commands are accessible in this place, to them
+        //         const cmdsAvailable = commandsEmbed.fields.length;
+        //         commandsEmbed.footer.text = `${cmdsAvailable} command${
+        //             cmdsAvailable != 1 ? "s" : ""
+        //         } available.`;
 
-                return;
+        //         // send the embed!
+        //         await msg.channel.send({ embed: commandsEmbed });
 
-            case 1:
-                // 1 arg, show command help text if it can be run by the user
+        //         return;
 
-                // retrieve command from the client
-                const cmd = client.manager.commands.get(args[0]);
+        //     case 1:
+        //         // 1 arg, show command help text if it can be run by the user
 
-                // handle command not found or they don't have access (purposely don't tell them the exact reason)
-                if (
-                    cmd == undefined ||
-                    client.services.command.cantInvoke(msg, cmd)
-                ) {
-                    return client.response.emit(
-                        msg.channel,
-                        `\`${args[0]}\` could not be found, or you don't have access to it here.`,
-                        "invalid"
-                    );
-                }
+        //         // retrieve command from the client
+        //         const cmd = client.manager.commands.get(args[0]);
 
-                // build embed with long description text
-                let helpEmbed = {
-                    color: "#F67B21",
-                    title: `Help text for \`${cmd.name}\``,
-                    description:
-                        `${cmd.longDescription}\n` +
-                        "**Usage**:\n" +
-                        `\`${cmd.usage
-                            .map((usg) => client.settings.prefix + usg)
-                            .join("\n")}\``,
-                };
+        //         // handle command not found or they don't have access (purposely don't tell them the exact reason)
+        //         if (
+        //             cmd == undefined ||
+        //             client.services.command.cantInvoke(msg, cmd)
+        //         ) {
+        //             return client.response.emit(
+        //                 msg.channel,
+        //                 `\`${args[0]}\` could not be found, or you don't have access to it here.`,
+        //                 "invalid"
+        //             );
+        //         }
 
-                // send the embed!
-                await msg.channel.send({ embed: helpEmbed });
+        //         // build embed with long description text
+        //         let helpEmbed = {
+        //             color: "#F67B21",
+        //             title: `Help text for \`${cmd.name}\``,
+        //             description:
+        //                 `${cmd.longDescription}\n` +
+        //                 "**Usage**:\n" +
+        //                 `\`${cmd.usage
+        //                     .map((usg) => client.settings.prefix + usg)
+        //                     .join("\n")}\``,
+        //         };
 
-                return;
+        //         // send the embed!
+        //         await msg.channel.send({ embed: helpEmbed });
 
-            default:
-                return client.response.emit(
-                    msg.channel,
-                    `Usage: \`${this.getUsageText(client.settings.prefix)}\``,
-                    "invalid"
-                );
-        }
+        //         return;
+
+        //     default:
+        //         return client.response.emit(
+        //             msg.channel,
+        //             `Usage: \`${this.getUsageText(client.settings.prefix)}\``,
+        //             "invalid"
+        //         );
+        // }
     }
 }
