@@ -15,7 +15,7 @@ import ACMClient from "../Bot";
     └───────────────────────── second (0 - 59, OPTIONAL)
  */
 
-export type TaskType = "reminder" | "newsletter" | "rsvp_reminder";
+export type TaskType = "reminder" | "newsletter" | "rsvp_reminder" | "flush_message_queue";
 
 export default class ScheduleManager {
     public tasks: Collection<string, Task>;
@@ -114,8 +114,9 @@ export default class ScheduleManager {
      * Callback function that is scheduled and directs control back to the appropriate manager
      */
     public async runTask(task: Task) {
-        // remove the task from all records
-        await this.deleteTask(task.id!);
+        // remove the task from all records if not cron
+        if (typeof task.cron !== 'string')
+            await this.deleteTask(task.id!);
 
         switch (task.type) {
             case "newsletter":
@@ -132,8 +133,10 @@ export default class ScheduleManager {
                 // example: this.client.rsvpmanager.sendRSVP(data.event_id);
                 this.client.services.newsletter.remind(task.payload);
                 break;
+            case "flush_message_queue":
+                this.client.sender.flush();
+                break;
         }
-
     }
 }
 

@@ -12,6 +12,7 @@ import LoggerUtil from "../utils/Logger";
 import ResponseUtil, { ResponseFormat } from "../utils/Responses";
 import { settings } from "../botsettings";
 import SpreadsheetManager from "./managers/SpreadsheetManager";
+import RatelimitManager from "./managers/RatelimitManager";
 
 export interface BotConfig {
     token: string;
@@ -37,6 +38,7 @@ export default class NewsletterClient extends Client {
     public indicators: IndicatorManager;
     public scheduler: ScheduleManager;
     public spreadsheet: SpreadsheetManager;
+    public sender: RatelimitManager;
     // public express: ExpressManager;
     // public calendar: CalendarManager;
     // services
@@ -61,6 +63,7 @@ export default class NewsletterClient extends Client {
         this.database = new DatabaseManager(this, config);
         this.scheduler = new ScheduleManager(this);
         this.spreadsheet = new SpreadsheetManager(this);
+        this.sender = new RatelimitManager(this);
         this.error = new ErrorManager(this);
         this.indicators = new IndicatorManager();
         this.services = {
@@ -83,13 +86,16 @@ export default class NewsletterClient extends Client {
         this.error.setup();
         this.scheduler.setup();
 
+        this.sender.setup();
+
         await this.services.newsletter.schedule();
         // this.on("debug", (e) => {
         //     console.error(e);
         // })
 
-        this.services.newsletter.send();
 
         await this.login(this.config.token);
+        
+        await this.services.newsletter.send();
     }
 }

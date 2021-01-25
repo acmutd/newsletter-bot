@@ -21,6 +21,7 @@ export interface Settings {
     };
     channels: {
         error: string;
+        log: string;
     };
 }
 

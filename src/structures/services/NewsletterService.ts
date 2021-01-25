@@ -6,6 +6,10 @@ import {
     Message,
     MessageAdditions,
     MessageEmbed,
+    Channel,
+    DMChannel,
+    NewsChannel,
+    TextChannel
 } from "discord.js";
 import { GoogleSpreadsheet, GoogleSpreadsheetRow } from "google-spreadsheet";
 import {
@@ -37,6 +41,7 @@ export default class NewsletterService {
     public client: NewsletterClient;
     private spreadsheetId: string;
     private defaultCron: string;
+    private enabled = true;
 
     // Yse a cached doc whenever time since docCacheTime < docCacheThreshold
     //   NOTE THAT THIS ONLY AFFECTS METADATA.
@@ -57,6 +62,7 @@ export default class NewsletterService {
 
     // schedule the newsletter task
     public async schedule() {
+        if (!this.enabled) return;
         // note that because of the specified ID, this will not get duplicated.
         await this.client.scheduler.createTask({
             id: "newsletter",
@@ -69,6 +75,7 @@ export default class NewsletterService {
     // Event monitoring and handling //
     //
     public async send() {
+        if (!this.enabled) return;
         // recache
         await this.client.spreadsheet.fetchAllOrgs();
 
@@ -130,6 +137,7 @@ export default class NewsletterService {
         const users: Map<string, any> = new Map<string, any>(); // map of userID -> subscription & follow preferences from the DB
 
         // build `users`
+        /*
         try {
             const u = await this.client.database.schemas.member.find({});
             u.forEach((m) =>
@@ -143,19 +151,58 @@ export default class NewsletterService {
         } catch (e) {
             this.client.logger.error(e);
         }
+        */
 
         // loop through org guilds and send newsletter to members
         const orgsWithGuild = orgWithEvents.filter((o) => !!o.org.guild);
         for (const data of orgsWithGuild) {
-            // resolve guild
-            try {
-                const guild = await this.client.guilds.fetch(data.org.guild!);
-                var members = await guild.members.fetch();
-            } catch (e) {
-                this.client.logger.error(e);
-                continue;
+            // resolve newsletter channel
+            let channel: TextChannel | NewsChannel | DMChannel | undefined;
+            if(data.org.newsletterChannel) {
+                const res = await this.client.channels.resolve(data.org.newsletterChannel);
+                if (!res) {
+                    this.client.error.handleMsg(`Channel not found for ${data.org.abbr}`);
+                }
+                else if(!res.isText()) {
+                    this.client.error.handleMsg(`Channel is not text-based for ${data.org.abbr}`);
+                }
+                else {
+                    channel = res;
+                }
+            }
+            else {
+                this.client.error.handleMsg(`Newsletter channel is not configured for ${data.org.abbr}`);
+            }
+            if (!channel) continue;
+
+            // initialize temporary TOC data for this org
+            let tocData: OrgMessage[] = [];
+
+            // send the banner
+            await channel.send({
+                files: [
+                    "https://media.discordapp.net/attachments/744488968338276436/791967343223767060/newsletter_banner.png",
+                ],
+            });
+
+            // send the rest of the newsletter, one message at a time.
+            for (const n of newsletter) {
+                // if this is an org-related embed
+                if (!(n instanceof MessageEmbed) && n.localId) {
+                    const msg = await channel.send(n);
+                    // track message in the table of contents
+                    tocData.push({
+                        orgAbbr: n.abbr,
+                        msg
+                    });
+                } 
+
+                else await channel.send(n);
             }
 
+            await channel.send(this.buildTOC(tocData));
+
+            /*
             // send to the members
             members.forEach(async (m) => {
                 // comment out one of the lines below, depending on whether to send the newsletter to people with unknown preference
@@ -168,6 +215,7 @@ export default class NewsletterService {
                           !m.user.bot
                 ) {
                     received.add(m.id);
+                    const dmChannel = await m.createDM();
                     let tocData: OrgMessage[] = [];
 
                     // send the banner
@@ -179,20 +227,18 @@ export default class NewsletterService {
 
                     // send the rest of the newsletter, one message at a time.
                     for (const n of newsletter) {
-                        if (!(n instanceof MessageEmbed) && n.localId) {
-                            // if this is an org-related embed
-                            if (
-                                !users.get(m.id).unfollowed.includes(n.localId)
-                            ) {
-                                //  if user is not unfollowed from this org
+                        if (!(n instanceof MessageEmbed) && n.localId) {            // if this is an org-related embed
+                            if (!users.get(m.id).unfollowed.includes(n.localId)) {  // if user is not unfollowed from this org
                                 const msg = await m.send(n);
                                 // track message in the table of contents
                                 tocData.push({
                                     orgAbbr: n.abbr,
-                                    msg,
+                                    msg
                                 });
                             }
-                        } else await m.send(n);
+                        } 
+
+                        else await m.send(n);
                     }
 
                     await m.send(this.buildTOC(tocData));
@@ -205,6 +251,7 @@ export default class NewsletterService {
                     // );
                 }
             });
+            */
         }
         this.schedule();
     }
@@ -238,9 +285,9 @@ export default class NewsletterService {
         return new MessageEmbed({
             title: data.org.name,
             description:
-                `${data.org.description}\n\n` +
-                `🎟 Respond with \`${settings.prefix}rsvp [number]\` to RSVP for an event!\n` +
-                `🚪 Respond with \`${settings.prefix}unsubscribe\` to unsubscribe from the ${data.org.abbr} weekly newsletter.\n\n`,
+                `${data.org.description}\n\n` + '',
+                // `🎟 Respond with \`${settings.prefix}rsvp [number]\` to RSVP for an event!\n` +
+                // `🚪 Respond with \`${settings.prefix}unsubscribe\` to unsubscribe from the ${data.org.abbr} weekly newsletter.\n\n`,
             color: data.org.color,
             author: {
                 name: `${data.org.abbr}'s Weekly Newsletter`,
@@ -305,233 +352,88 @@ export default class NewsletterService {
             if (!org) return;
 
             var user = await this.client.users.fetch(userID);
-            if (user) user.send(embed);
+            if (user) {
+                user.send(embed);
+            }
         } catch (e) {
             this.client.logger.error(e);
         }
     }
 
-    // public async send() {
-    //     // return; // disable newsletter for now
-    //     console.log("Running newsletter.send() process!");
+    /*
+    async handleReactionAdd(reaction: MessageReaction, user: User) {
+        // fetch everything to ensure all the data is complete
+        if (reaction.partial) await reaction.fetch();
+        await reaction.users.fetch();
+        const msg = await reaction.message.fetch();
 
-    //     // create a basic embed
-    //     let newsletter = await this.buildOrgEmbed("ACM");
+        // resolve user into guild member (so that we can check their roles later)
+        const ACMGuild = await this.client.guilds.fetch(settings.guild);
+        const member = await ACMGuild.members.fetch(user.id);
 
-    //     // loop through all members in member schema, and find the members with preferences.subscribed = false;
-    //     const unsubscribed = await this.client.database.schemas.member
-    //         .find({
-    //             "preferences.subscribed": false,
-    //         })
-    //         .map((el: any) => el["_id"]);
-    //     console.log(unsubscribed);
-    //     // send to every member in client.members - unsubscribed
-    //     const members = await this.client.guilds
-    //         .resolve(settings.guild)
-    //         ?.members.fetch();
+        // regex to parse encoded data
+        const re = /\[\u200B\]\(http:\/\/fake\.fake\?data=(.*?)\)/;
 
-    //     // remove everyone who is unsubscribed or is a bot
-    //     const subscribed = members?.filter(
-    //         (member) => !unsubscribed.includes(member.id) && !member.user.bot
-    //     );
+        // Ignore if the message isn't something we care about
+        if (user.id === this.client.user?.id ||                 // bot is the one who reacted
+            msg.channel.id !== this.privateChannelId ||         // wrong channel
+            msg.author.id !== this.client.user?.id ||           // author is not bot
+            !reaction.users.cache.has(this.client.user?.id) ||  // bot check mark react is not there
+            reaction.emoji.name !== "✅" ||                     // wrong emote
+            msg.embeds.length !== 1 ||                          // # of embeds not 1
+            !msg.embeds[0].title ||                             // no title
+            !msg.embeds[0].title!.startsWith("Response for") || // wrong title
+            !msg.embeds[0].description ||                       // no description
+            !re.test(msg.embeds[0].description)                 // desc doesn't contain our embedded data
 
-    //     for (let subscriber of subscribed!.values()) {
-    //         try {
-    //             await subscriber.send(newsletter);
-    //         } catch (e) {
-    //             console.log(
-    //                 `Subscriber ${subscriber.user.username} has DMs blocked. Newsletter not sent`
-    //             );
-    //         }
-    //     }
-    //     /*
-    //             subscribed?.forEach(async (member) => {
-    //                     const dmChannel = await member.createDM();
-    //                     dmChannel.send(newsletter);
-    //             });
-    //             */
+        )
+            return;
 
-    //     // reschedule a new newsletter task for next week
-    //     this.schedule();
-    // }
+        // If reactor is not a mod, remove their reaction and rat them out.
+        if (!member.roles.cache.has(this.staffRoleId)) {
+            reaction.users.remove(user.id);
+            return this.client.response.emit(
+                msg.channel,
+                `${user}, you are not authorized to approve points!`,
+                "invalid"
+            )
+        }
 
-    //* Embed Builders
+        // Award the points, clear reactions, react with 🎉, print success
+        const encodedData = JSON.parse(decodeURIComponent(msg.embeds[0].description.match(re)![1]))
+        this.awardPoints(encodedData.points, encodedData.activity, new Set<string>([encodedData.snowflake]));
+        reaction.message.reactions.removeAll()
+            .then(() => reaction.message.react("🎉"));
 
-    /**
-     * Builds and returns an event embed for a single org.
-     * @param orgAbbrev the org's abbreviation (i.e. name of sheet)
-     */
-    // public async buildOrggEmbed(orgAbbrev: any): Promise<MessageEmbed> {
-    //     // First things first: figure out if this org exists in our organization key
-    //     const orgMapping = await this.getOrgMapping();
-    //     // handle org not in org key
-    //     if (!orgMapping.has(orgAbbrev)) {
-    //         return new MessageEmbed({
-    //             description: `${orgAbbrev} isn't configured in the organization key`,
-    //             color: "RED",
-    //         });
-    //     }
-    //     const orgConfig = orgMapping.get(orgAbbrev)!;
+        let embed = new MessageEmbed({
+            color: 'GREEN',
+            description: `**${user} has approved \`${encodedData.activity}\` for <@${encodedData.snowflake}>!**\n` +
+                `[link to original message](${msg.url})`,
+        });
 
-    //     // now that it supposedly exists, lets pull the events from the corresponding google sheet
-    //     // note that this pulls only the next week of events.
-    //     const events = await this.fetchOrgEvents(orgAbbrev);
-    //     // handle the case where we can't find this org's sheet
-    //     if (events == undefined) {
-    //         return new MessageEmbed({
-    //             description: `A sheet for ${orgAbbrev} doesn't exist, even though it exists in the organization key!`,
-    //             color: "RED",
-    //         });
-    //     }
+        return msg.channel.send(embed);
+    }
+    */
 
-    //     // At this point, we have our organization configuration and the events themselves.
+    /*
+        const encodedData = {
+            snowflake: userData.snowflake,
+            activity: answers[1].choice.label,
+            points: pointsToAdd,
+        };
 
-    //     // split events into their divisions
-    //     const ed: any = {};
-    //     events.forEach(
-    //         (e) =>
-    //             (ed[e.division] = ed.hasOwnProperty(e.division)
-    //                 ? [...ed[e.division], e]
-    //                 : [e])
-    //     );
-
-    //     // make the actual embed
-    //     let orgEmbed = new MessageEmbed({
-    //         title: `📰 __${orgAbbrev}'s Weekly Newsletter__`,
-    //         description:
-    //             "\n- Respond with a number to RSVP for an event!\n\n- Respond with `unsubscribe` to unsubscribe from the ACM weekly newsletter.\n``",
-    //         author: {
-    //             name: orgConfig["Full Name"],
-    //             iconURL: orgConfig["Logo [URL]"],
-    //         },
-    //         color: 16738560,
-    //         footer: {
-    //             text: "Newsletter",
-    //         },
-    //         fields: Object.keys(ed).map((division: any) => {
-    //             let str = "";
-    //             ed[division].forEach(
-    //                 (e: Event) =>
-    //                     (str += `**${e.title}** on \`${
-    //                         e.date.toDateString().split(" ")[0]
-    //                     } @ ${this.formatAMPM(e.date)}\`\n`)
-    //             );
-    //             return { name: division, value: str, inline: false };
-    //         }),
-    //     });
-
-    //     return orgEmbed;
-    // }
-
-    /**
-     * Builds and returns an announcement embed for a particular org.
-     */
-    public buildAnnouncement() {}
-
-    /**
-     * Formats Date object into `HH:MM AM/PM`, in CST
-     */
-    // formatAMPM(date: Date): string {
-    //     const options = {
-    //         timeZone: "America/Chicago",
-    //         hour: "numeric",
-    //         minute: "numeric",
-    //     };
-    //     return date.toLocaleString("en-US", options);
-    // }
-
-    /**
-     * Returns events in the next week for the specified organization, or `undefined` if that sheet cannot be found.
-     * @param orgAbbrev name of the sheet to look in
-     */
-    // async fetchOrgEvents(orgAbbrev: string): Promise<Event[] | undefined> {
-    //     const doc = await this.getDoc();
-    //     const sheet = doc.sheetsByIndex.find((s) => s.title == orgAbbrev);
-
-    //     // return undefined if there is no sheet with the name in orgAbbrev
-    //     if (sheet == undefined) {
-    //         return undefined;
-    //     }
-
-    //     const rows = await sheet.getRows();
-    //     const validRows = rows.filter(
-    //         (row: any) =>
-    //             row["Start Time"] != undefined && row["Start Time"] != "TBA"
-    //     );
-    //     const allEvents: Event[] = validRows.map((row: any) => {
-    //         return {
-    //             title: row["Event Name"],
-    //             description: row["Event Description"],
-    //             division: row["Team/Division"],
-    //             room: row["Room"],
-    //             date: new Date(row.Date + " " + row["Start Time"]),
-    //         };
-    //     });
-
-    //     // filter for only events in the upcoming week
-    //     let today = new Date();
-    //     const events = allEvents.filter((e) => {
-    //         return (
-    //             e.date > today &&
-    //             e.date <
-    //                 new Date(
-    //                     today.getFullYear(),
-    //                     today.getMonth(),
-    //                     today.getDate() + 7
-    //                 )
-    //         );
-    //     });
-
-    //     return events;
-    // }
-
-    /**
-     * Reads the organization key from Google Sheets and returns a Map of abbreviation -> config data
-     */
-    // async getOrgMapping(): Promise<Map<string, GoogleSpreadsheetRow>> {
-    //     const doc = await this.getDoc();
-    //     const sheet = doc.sheetsByIndex.find(
-    //         (s) => s.title == "Organization Key"
-    //     );
-
-    //     let res = new Map<string, GoogleSpreadsheetRow>();
-
-    //     if (sheet == undefined) {
-    //         throw new Error('No sheet called "Organization Key"');
-    //     }
-
-    //     const rows = await sheet.getRows();
-
-    //     rows.forEach((row) => {
-    //         if (row["Abbr. Name [Same as sheet title]"] != undefined)
-    //             res.set(row["Abbr. Name [Same as sheet title]"], row);
-    //     });
-
-    //     return res;
-    // }
-
-    /**
-     * Returns the Google Sheets document object for the events spreadsheet, with info loaded.
-     */
-    // async getDoc(): Promise<GoogleSpreadsheet> {
-    //     // don't bother re-retrieving the metadata if we recently retrieved it
-    //     if (
-    //         this.doc != undefined &&
-    //         new Date().getTime() - this.docCacheTime < this.docCacheThreshold
-    //     ) {
-    //         console.log(
-    //             "A cached version of the newsletter google sheets metadata was used"
-    //         );
-    //         return this.doc;
-    //     }
-
-    //     const doc = new GoogleSpreadsheet(this.spreadsheetId);
-    //     doc.useApiKey(settings.keys.sheets);
-
-    //     await doc.loadInfo();
-    //     this.doc = doc;
-    //     this.docCacheTime = new Date().getTime();
-
-    //     return doc;
-    // }
+        let embed = new MessageEmbed({
+            title: `Response for ${userData.full_name}`,
+            description: 
+                // we'll sneakily hide some data here :)
+                `[\u200B](http://fake.fake?data=${encodeURIComponent(JSON.stringify(encodedData))})` +
+                `**Discord**: <@${userData.snowflake}>\n` + 
+                `**Email**: \`${userData.email}\`\n` +     
+                `**Activity**: \`${answers[1].choice.label}\`\n\n` +
+                `**Proof**:`,
+            footer: {
+                text: `${pointsToAdd} points will be awarded upon approval.`
+            }
+        });
+    */
 }

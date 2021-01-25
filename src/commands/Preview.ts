@@ -56,5 +56,17 @@ export default class PreviewCommand extends Command {
         const embed = client.services.newsletter.buildOrgEmbed(orgWithEvents);
 
         msg.channel.send(embed);
+
+        msg.channel.send(
+            new MessageEmbed({
+                color: '#EEEEEE',
+                description: 'This is a preview of next week\'s newsletter. Please **DO NOT RSVP** based on these event numbers.',
+                footer: {
+                    text: `Preview generated in ${
+                        (new Date().getTime() - startTime) / 1000
+                    } seconds.`
+                }
+            })
+        );
     }
 }

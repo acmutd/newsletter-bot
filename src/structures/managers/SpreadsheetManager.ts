@@ -24,6 +24,7 @@ export interface SpreadsheetOrg {
     localId: string;
     abbr: string;
     name: string;
+    newsletterChannel: string;
     description?: string;
     guild?: string;
     website?: string;
@@ -134,11 +135,13 @@ export default class SpreadsheetManager {
 
         return rows
             .filter(
-                (row) =>
-                    max > this.rowToEvent(row).date &&
-                    now < this.rowToEvent(row).date
+                (row) => {
+                    const event = this.rowToEvent(row);
+                    if(!event) return false;
+                    return event && max > event.date && now < event.date
+                }
             )
-            .map((r) => this.rowToEvent(r));
+            .map((r) => this.rowToEvent(r)!);
     }
 
     // Helper functions (should be static but idfl writing out SpreadsheetManager every time)
@@ -148,6 +151,7 @@ export default class SpreadsheetManager {
             abbr: row["Abbr. Name [Same as sheet title]"],
             name: row["Full Name"],
             description: row["Description"],
+            newsletterChannel: row["Channel ID"],
             guild: row["Guild ID"],
             website: row["Website"],
             logo: row["Logo [URL]"],
@@ -155,11 +159,13 @@ export default class SpreadsheetManager {
         };
     }
 
-    private rowToEvent(row: any): SpreadsheetEvent {
+    private rowToEvent(row: any): SpreadsheetEvent | null {
         const start = row["Start Time"];
+        const date = this.generateDate(row["Date"], start)
+        if(!date) return null;
+        
         return {
-            date:
-                this.generateDate(row["Date"], start) ?? new Date(row["Date"]),
+            date,
             name: row["Event Name"] ?? "unnamed event",
             description: row["Event Description"],
             start: this.generateDate(row["Date"], start),
