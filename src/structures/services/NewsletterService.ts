@@ -9,7 +9,9 @@ import {
     Channel,
     DMChannel,
     NewsChannel,
-    TextChannel
+    TextChannel,
+    MessageReaction,
+    User,
 } from "discord.js";
 import { GoogleSpreadsheet, GoogleSpreadsheetRow } from "google-spreadsheet";
 import {
@@ -76,11 +78,15 @@ export default class NewsletterService {
     //
     public async send() {
         if (!this.enabled) return;
+
+        // emoji guild
+        const emojiGuild = await this.client.guilds.fetch(settings.emojiGuild);
+
         // recache
         await this.client.spreadsheet.fetchAllOrgs();
 
         // get org events
-        const orgWithEvents: OrgWithEvents[] = []; // Array of org + events
+        const orgsWithEvents: OrgWithEvents[] = []; // Array of org + events
         let eventsToDB: EventData[] = []; // Array of events indexed by rsvp number
         let count = 1; // Tracks the current rsvp number
 
@@ -103,7 +109,7 @@ export default class NewsletterService {
 
                 events = [...addedID];
                 eventsToDB = [...toDB, ...eventsToDB];
-                orgWithEvents.push({ events, org });
+                orgsWithEvents.push({ events, org });
             }
         }
 
@@ -121,7 +127,7 @@ export default class NewsletterService {
         )[] = [];
 
         // add org embeds
-        orgWithEvents.forEach((data) => {
+        orgsWithEvents.forEach((data) => {
             newsletter.push({
                 localId: data.org.localId,
                 abbr: data.org.abbr,
@@ -133,8 +139,8 @@ export default class NewsletterService {
         newsletter.push(this.client.services.command.buildDMHelp());
 
         // everything has been built, time to send out
-        const received: Set<string> = new Set<string>(); // set of userIDs, tracked to prevent double-sending to the same user
-        const users: Map<string, any> = new Map<string, any>(); // map of userID -> subscription & follow preferences from the DB
+        // const received: Set<string> = new Set<string>(); // set of userIDs, tracked to prevent double-sending to the same user
+        // const users: Map<string, any> = new Map<string, any>(); // map of userID -> subscription & follow preferences from the DB
 
         // build `users`
         /*
@@ -154,24 +160,27 @@ export default class NewsletterService {
         */
 
         // loop through org guilds and send newsletter to members
-        const orgsWithGuild = orgWithEvents.filter((o) => !!o.org.guild);
+        const orgsWithGuild = orgsWithEvents.filter((o) => !!o.org.guild);
         for (const data of orgsWithGuild) {
             // resolve newsletter channel
             let channel: TextChannel | NewsChannel | DMChannel | undefined;
-            if(data.org.newsletterChannel) {
-                const res = await this.client.channels.resolve(data.org.newsletterChannel);
-                if (!res) {
-                    this.client.error.handleMsg(`Channel not found for ${data.org.abbr}`);
-                }
-                else if(!res.isText()) {
-                    this.client.error.handleMsg(`Channel is not text-based for ${data.org.abbr}`);
-                }
-                else {
-                    channel = res;
-                }
-            }
-            else {
-                this.client.error.handleMsg(`Newsletter channel is not configured for ${data.org.abbr}`);
+            if (data.org.newsletterChannel) {
+                const res = await this.client.channels.resolve(
+                    data.org.newsletterChannel
+                );
+                if (!res)
+                    this.client.error.handleMsg(
+                        `Channel not found for ${data.org.abbr}`
+                    );
+                else if (!res.isText())
+                    this.client.error.handleMsg(
+                        `Channel is not text-based for ${data.org.abbr}`
+                    );
+                else channel = res;
+            } else {
+                this.client.error.handleMsg(
+                    `Newsletter channel is not configured for ${data.org.abbr}`
+                );
             }
             if (!channel) continue;
 
@@ -188,16 +197,30 @@ export default class NewsletterService {
             // send the rest of the newsletter, one message at a time.
             for (const n of newsletter) {
                 // if this is an org-related embed
+                let msg;
+                let embed: MessageEmbed;
                 if (!(n instanceof MessageEmbed) && n.localId) {
-                    const msg = await channel.send(n);
+                    msg = await channel.send(n.embed);
+                    embed = n.embed;
                     // track message in the table of contents
                     tocData.push({
                         orgAbbr: n.abbr,
-                        msg
+                        msg,
                     });
-                } 
-
-                else await channel.send(n);
+                } else {
+                    msg = await channel.send(n);
+                    embed = n as MessageEmbed;
+                }
+                const obj = decode(embed.description);
+                if (obj) {
+                    const keys = Object.keys(obj.reactions);
+                    for (const name of keys) {
+                        const emote = emojiGuild.emojis.cache.find(
+                            (e) => e.name == name
+                        );
+                        if (emote) await msg.react(emote);
+                    }
+                }
             }
 
             await channel.send(this.buildTOC(tocData));
@@ -282,12 +305,42 @@ export default class NewsletterService {
             day: "numeric",
         });
 
+        /*
+        schema for encodedData:
+        {
+            newsletter: true,
+            reactions: {
+                emojiId: number | string,
+            },
+            abbr: "ACM",
+        }
+
+        functions:
+        - handleNewsletterReact()
+            - encode(orgWithEvents)
+            - decode(data)
+    */
+        const encodedData: {
+            newsletter: boolean;
+            reactions: any;
+            localId: string;
+        } = {
+            newsletter: true,
+            reactions: {},
+            localId: data.org.localId,
+        };
+
+        encodedData.reactions[`_info`] = "info";
+        data.events.forEach((e) => {
+            encodedData.reactions[`_${e.id}`] = e.id;
+        });
+
         return new MessageEmbed({
             title: data.org.name,
             description:
-                `${data.org.description}\n\n` + '',
-                // `🎟 Respond with \`${settings.prefix}rsvp [number]\` to RSVP for an event!\n` +
-                // `🚪 Respond with \`${settings.prefix}unsubscribe\` to unsubscribe from the ${data.org.abbr} weekly newsletter.\n\n`,
+                `${encode(encodedData)}` + `${data.org.description}\n\n` + "",
+            // `🎟 Respond with \`${settings.prefix}rsvp [number]\` to RSVP for an event!\n` +
+            // `🚪 Respond with \`${settings.prefix}unsubscribe\` to unsubscribe from the ${data.org.abbr} weekly newsletter.\n\n`,
             color: data.org.color,
             author: {
                 name: `${data.org.abbr}'s Weekly Newsletter`,
@@ -416,6 +469,21 @@ export default class NewsletterService {
     */
 
     /*
+        schema for encodedData:
+        {
+            newsletter: true,
+            reactions: {
+                emojiId: number | string,
+            },
+            abbr: "ACM",
+        }
+
+        functions:
+        - handleNewsletterReact()
+            - encode(orgWithEvents)
+            - decode(data)
+    */
+    /*
         const encodedData = {
             snowflake: userData.snowflake,
             activity: answers[1].choice.label,
@@ -436,4 +504,43 @@ export default class NewsletterService {
             }
         });
     */
+
+    public handleReaction(reaction: MessageReaction, user: User) {
+        if (reaction.message.embeds.length == 0) return;
+        if (!reaction.message.embeds[0].description) return;
+
+        const obj = decode(reaction.message.embeds[0].description);
+        if (!obj) return;
+        if (!obj.newsletter) return;
+        if (!obj.reactions) return;
+
+        let reactionRes: number | string | undefined;
+
+        Object.keys(obj.reactions).forEach((n) => {
+            if (reaction.emoji.name.includes(n)) reactionRes = obj.reactions[n];
+        });
+
+        if (!reactionRes) return;
+
+        if (typeof reactionRes == "number") {
+            // dm event info, with reaction button to rsvp
+        }
+        if (reactionRes == "info") {
+            // dm org info
+        }
+    }
+}
+
+function encode(obj: any): string {
+    return `[\u200B](http://fake.fake?data=${encodeURIComponent(
+        JSON.stringify(obj)
+    )})`;
+}
+
+function decode(description: string | null): any {
+    if (!description) return;
+    const re = /\[\u200B\]\(http:\/\/fake\.fake\?data=(.*?)\)/;
+    const matches = description.match(re);
+    if (!matches || matches.length < 2) return;
+    return JSON.parse(decodeURIComponent(description.match(re)![1]));
 }

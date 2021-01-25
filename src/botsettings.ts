@@ -16,6 +16,7 @@ export interface Settings {
     disabledCommands: string[];
     disabledCategories: string[];
     guild: string;
+    emojiGuild: string;
     sheets: {
         calendarURL: string;
     };
