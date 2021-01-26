@@ -8,12 +8,10 @@ import {
     TextChannel,
     MessageReaction,
     User,
+    GuildEmoji,
 } from "discord.js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import {
-    SpreadsheetOrg,
-    SpreadsheetEvent,
-} from "../managers/SpreadsheetManager";
+import { SpreadsheetOrg, SpreadsheetEvent } from "../managers/SpreadsheetManager";
 import { EventData } from "../models/Event";
 const isUrl = require("is-url");
 
@@ -161,17 +159,10 @@ export default class NewsletterService {
             // resolve newsletter channel
             let channel: TextChannel | NewsChannel | DMChannel | undefined;
             if (data.org.newsletterChannel) {
-                const res = await this.client.channels.resolve(
-                    data.org.newsletterChannel
-                );
-                if (!res)
-                    this.client.error.handleMsg(
-                        `Channel not found for ${data.org.abbr}`
-                    );
+                const res = await this.client.channels.resolve(data.org.newsletterChannel);
+                if (!res) this.client.error.handleMsg(`Channel not found for ${data.org.abbr}`);
                 else if (!res.isText())
-                    this.client.error.handleMsg(
-                        `Channel is not text-based for ${data.org.abbr}`
-                    );
+                    this.client.error.handleMsg(`Channel is not text-based for ${data.org.abbr}`);
                 else channel = res;
             } else {
                 this.client.error.handleMsg(
@@ -211,9 +202,7 @@ export default class NewsletterService {
                 if (obj) {
                     const keys = Object.keys(obj.reactions);
                     for (const name of keys) {
-                        const emote = emojiGuild.emojis.cache.find(
-                            (e) => e.name == name
-                        );
+                        const emote = emojiGuild.emojis.cache.find((e) => e.name == name);
                         if (emote) await msg.react(emote);
                     }
                 }
@@ -332,8 +321,7 @@ export default class NewsletterService {
 
         return new MessageEmbed({
             title: data.org.name,
-            description:
-                `${encode(encodedData)}` + `${data.org.description}\n\n` + "",
+            description: `${encode(encodedData)}` + `${data.org.description}\n\n` + "",
             // `🎟 Respond with \`${settings.prefix}rsvp [number]\` to RSVP for an event!\n` +
             // `🚪 Respond with \`${settings.prefix}unsubscribe\` to unsubscribe from the ${data.org.abbr} weekly newsletter.\n\n`,
             color: data.org.color,
@@ -370,9 +358,7 @@ export default class NewsletterService {
     private buildTOC(tocData: OrgMessage[]): MessageEmbed {
         return new MessageEmbed({
             title: "Newsletter Table of Contents",
-            description: tocData
-                .map((x, i) => `${i + 1}. [${x.orgAbbr}](${x.msg.url})`)
-                .join("\n"),
+            description: tocData.map((x, i) => `${i + 1}. [${x.orgAbbr}](${x.msg.url})`).join("\n"),
         });
     }
 
@@ -390,9 +376,7 @@ export default class NewsletterService {
 
         // we'll add more to this
         const embed = new MessageEmbed();
-        embed.setTitle(
-            `\'${e.event.name}\' is starting in ${minutesBeforeStart} minutes!`
-        );
+        embed.setTitle(`\'${e.event.name}\' is starting in ${minutesBeforeStart} minutes!`);
         if (e.event.location) embed.addField("Location", e.event.location);
 
         try {
@@ -407,98 +391,6 @@ export default class NewsletterService {
             this.client.logger.error(e);
         }
     }
-
-    /*
-    async handleReactionAdd(reaction: MessageReaction, user: User) {
-        // fetch everything to ensure all the data is complete
-        if (reaction.partial) await reaction.fetch();
-        await reaction.users.fetch();
-        const msg = await reaction.message.fetch();
-
-        // resolve user into guild member (so that we can check their roles later)
-        const ACMGuild = await this.client.guilds.fetch(settings.guild);
-        const member = await ACMGuild.members.fetch(user.id);
-
-        // regex to parse encoded data
-        const re = /\[\u200B\]\(http:\/\/fake\.fake\?data=(.*?)\)/;
-
-        // Ignore if the message isn't something we care about
-        if (user.id === this.client.user?.id ||                 // bot is the one who reacted
-            msg.channel.id !== this.privateChannelId ||         // wrong channel
-            msg.author.id !== this.client.user?.id ||           // author is not bot
-            !reaction.users.cache.has(this.client.user?.id) ||  // bot check mark react is not there
-            reaction.emoji.name !== "✅" ||                     // wrong emote
-            msg.embeds.length !== 1 ||                          // # of embeds not 1
-            !msg.embeds[0].title ||                             // no title
-            !msg.embeds[0].title!.startsWith("Response for") || // wrong title
-            !msg.embeds[0].description ||                       // no description
-            !re.test(msg.embeds[0].description)                 // desc doesn't contain our embedded data
-
-        )
-            return;
-
-        // If reactor is not a mod, remove their reaction and rat them out.
-        if (!member.roles.cache.has(this.staffRoleId)) {
-            reaction.users.remove(user.id);
-            return this.client.response.emit(
-                msg.channel,
-                `${user}, you are not authorized to approve points!`,
-                "invalid"
-            )
-        }
-
-        // Award the points, clear reactions, react with 🎉, print success
-        const encodedData = JSON.parse(decodeURIComponent(msg.embeds[0].description.match(re)![1]))
-        this.awardPoints(encodedData.points, encodedData.activity, new Set<string>([encodedData.snowflake]));
-        reaction.message.reactions.removeAll()
-            .then(() => reaction.message.react("🎉"));
-
-        let embed = new MessageEmbed({
-            color: 'GREEN',
-            description: `**${user} has approved \`${encodedData.activity}\` for <@${encodedData.snowflake}>!**\n` +
-                `[link to original message](${msg.url})`,
-        });
-
-        return msg.channel.send(embed);
-    }
-    */
-
-    /*
-        schema for encodedData:
-        {
-            newsletter: true,
-            reactions: {
-                emojiId: number | string,
-            },
-            abbr: "ACM",
-        }
-
-        functions:
-        - handleNewsletterReact()
-            - encode(orgWithEvents)
-            - decode(data)
-    */
-    /*
-        const encodedData = {
-            snowflake: userData.snowflake,
-            activity: answers[1].choice.label,
-            points: pointsToAdd,
-        };
-
-        let embed = new MessageEmbed({
-            title: `Response for ${userData.full_name}`,
-            description: 
-                // we'll sneakily hide some data here :)
-                `[\u200B](http://fake.fake?data=${encodeURIComponent(JSON.stringify(encodedData))})` +
-                `**Discord**: <@${userData.snowflake}>\n` + 
-                `**Email**: \`${userData.email}\`\n` +     
-                `**Activity**: \`${answers[1].choice.label}\`\n\n` +
-                `**Proof**:`,
-            footer: {
-                text: `${pointsToAdd} points will be awarded upon approval.`
-            }
-        });
-    */
 
     public handleReaction(reaction: MessageReaction, user: User) {
         if (reaction.message.embeds.length == 0) return;
@@ -518,20 +410,39 @@ export default class NewsletterService {
         if (!reactionRes) return;
         if (user.bot) return;
 
-        if (typeof reactionRes == "number") {
-            // dm event info, with reaction button to rsvp
-            console.log("number reaction");
-        }
-        if (reactionRes == "info") {
+        if (reaction.emoji.name == "_rsvp") {
+            // rsvp to event
+            console.log("rsvp reaction");
+            user.createDM().then((channel) => {
+                this.rsvp(channel, user, reactionRes as number);
+            });
+        } else if (reaction.emoji.name == "_info") {
             // dm org info
             console.log("info reaction");
+            user.createDM().then((channel) => {
+                // this.sendOrgInfo(channel);
+                // this.buildOrgEmbed()
+            });
+        } else {
+            if (typeof reactionRes == "number") {
+                // dm event info, with reaction button to rsvp
+                console.log("number reaction");
+                user.createDM().then((channel) => {
+                    this.sendEventInfo(channel, reactionRes as number);
+                });
+            }
         }
     }
 
-    public async sendInfo(
-        channel: TextChannel | DMChannel | NewsChannel,
-        id: number
-    ) {
+    public async sendEventInfo(channel: TextChannel | DMChannel | NewsChannel, id: number) {
+        const emojiGuild = await this.client.guilds.fetch(settings.emojiGuild);
+        let rsvpEmote: GuildEmoji | string | undefined = emojiGuild.emojis.cache.find(
+            (e) => e.name == "_rsvp"
+        );
+
+        if (!rsvpEmote) rsvpEmote = "🎟";
+
+        // get event
         const e = this.client.database.cache.events.get(`${id}`);
         if (!e) {
             this.client.response.emit(
@@ -541,9 +452,7 @@ export default class NewsletterService {
             );
             return;
         }
-        const org = await this.client.spreadsheet.fetchOrg(
-            e.abbr.toLowerCase()
-        );
+        const org = await this.client.spreadsheet.fetchOrg(e.abbr.toLowerCase());
         if (!org) {
             this.client.response.emit(
                 channel,
@@ -561,11 +470,9 @@ export default class NewsletterService {
         };
 
         const embed = new MessageEmbed({
-            description: `${encode(
-                encodedData
-            )}🎟 To RSVP for this event, send the command \`${
-                settings.prefix
-            }rsvp ${e.event.id}\``,
+            description: `${encode(encodedData)}🎟 To RSVP for this event, either react to ${
+                typeof rsvpEmote == "string" ? rsvpEmote : `<:${rsvpEmote.name}:${rsvpEmote.id}>`
+            }, or send the command \`${settings.prefix}rsvp ${e.event.id}\``,
             image: { url: e.event.posterUrl },
             color: org.color,
             author: {
@@ -582,8 +489,7 @@ export default class NewsletterService {
         // add the fields
         embed.addField("__**Name**__", e.event.name);
 
-        if (e.event.description)
-            embed.addField("__**Details**__", e.event.description);
+        if (e.event.description) embed.addField("__**Details**__", e.event.description);
 
         embed.addField(
             "__**Date**__",
@@ -598,30 +504,83 @@ export default class NewsletterService {
             })}\``
         );
 
-        if (e.event.team)
-            embed.addField("__**Team/Division**__", e.event.team, true);
-        if (e.event.location)
-            embed.addField("__**Location**__", e.event.location, true);
-        if (e.event.speaker)
-            embed.addField("__**Host(s)**__", e.event.speaker, true);
+        if (e.event.team) embed.addField("__**Team/Division**__", e.event.team, true);
+        if (e.event.location) embed.addField("__**Location**__", e.event.location, true);
+        if (e.event.speaker) embed.addField("__**Host(s)**__", e.event.speaker, true);
         if (e.event.speakerContact)
-            embed.addField(
-                "__**Host(s) Contact**__",
-                e.event.speakerContact,
-                true
-            );
+            embed.addField("__**Host(s) Contact**__", e.event.speakerContact, true);
 
         // check if poster url legit
         if (isUrl(e.event.posterUrl)) embed.setImage(e.event.posterUrl);
 
-        channel.send(embed);
+        const msg = await channel.send(embed);
+
+        if (rsvpEmote) await msg.react(rsvpEmote);
+    }
+
+    public async sendOrgInfo(channel: TextChannel | DMChannel | NewsChannel) {}
+
+    public async rsvp(channel: TextChannel | DMChannel | NewsChannel, user: User, id: number) {
+        const e = this.client.database.cache.events.get(`${id}`);
+        if (!e) {
+            this.client.response.emit(
+                channel,
+                `There is no event associated with that number this week.`,
+                "invalid"
+            );
+            return;
+        }
+
+        const minutesBeforeStart = 30;
+        const toBeNotified = new Date(e.event.start!.getTime() - minutesBeforeStart * 60000);
+        const now = new Date();
+        if (toBeNotified < now) {
+            if (e.event.start! < now) {
+                this.client.response.emit(channel, `This event has already started!`, "invalid");
+            } else {
+                this.client.response.emit(
+                    channel,
+                    `This event is already starting within ${minutesBeforeStart} minutes`,
+                    "invalid"
+                );
+            }
+            return;
+        }
+        const res = this.client.scheduler.tasks.find((t) => {
+            if (t.payload && t.payload.eventID && t.payload.userID) {
+                return t.payload.eventID == `${id}` && t.payload.userID == `${user.id}`;
+            }
+            return false;
+        });
+        if (res) {
+            this.client.response.emit(
+                channel,
+                `You have already RSVP'd for \`${e.event.name}\`.`,
+                "invalid"
+            );
+            return;
+        }
+
+        this.client.scheduler.createTask({
+            type: "rsvp_reminder",
+            payload: {
+                eventID: id,
+                userID: user.id,
+                minutesBeforeStart,
+            },
+            cron: new Date(e.event.start!.getTime() - minutesBeforeStart * 60000),
+        });
+
+        this.client.response.emit(
+            channel,
+            `Successfully RSVP'd for \`${e.event.name}\`.`,
+            "success"
+        );
     }
 }
 
 function encode(obj: any): string {
-    return `[\u200B](http://fake.fake?data=${encodeURIComponent(
-        JSON.stringify(obj)
-    )})`;
+    return `[\u200B](http://fake.fake?data=${encodeURIComponent(JSON.stringify(obj))})`;
 }
 
 function decode(description: string | null): any {
