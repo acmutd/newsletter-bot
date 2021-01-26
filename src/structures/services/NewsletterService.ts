@@ -1,25 +1,21 @@
 import NewsletterClient from "../Bot";
 import { settings } from "../../botsettings";
 import {
-    Collection,
-    GuildMember,
     Message,
-    MessageAdditions,
     MessageEmbed,
-    Channel,
     DMChannel,
     NewsChannel,
     TextChannel,
     MessageReaction,
     User,
 } from "discord.js";
-import { GoogleSpreadsheet, GoogleSpreadsheetRow } from "google-spreadsheet";
+import { GoogleSpreadsheet } from "google-spreadsheet";
 import {
     SpreadsheetOrg,
     SpreadsheetEvent,
 } from "../managers/SpreadsheetManager";
-import Member, { iMember } from "../models/Member";
 import { EventData } from "../models/Event";
+const isUrl = require("is-url");
 
 interface Event {
     title: string;
@@ -323,14 +319,13 @@ export default class NewsletterService {
         const encodedData: {
             newsletter: boolean;
             reactions: any;
-            localId: string;
         } = {
             newsletter: true,
-            reactions: {},
-            localId: data.org.localId,
+            reactions: {
+                _info: data.org.localId,
+            },
         };
 
-        encodedData.reactions[`_info`] = "info";
         data.events.forEach((e) => {
             encodedData.reactions[`_${e.id}`] = e.id;
         });
@@ -521,13 +516,105 @@ export default class NewsletterService {
         });
 
         if (!reactionRes) return;
+        if (user.bot) return;
 
         if (typeof reactionRes == "number") {
             // dm event info, with reaction button to rsvp
+            console.log("number reaction");
         }
         if (reactionRes == "info") {
             // dm org info
+            console.log("info reaction");
         }
+    }
+
+    public async sendInfo(
+        channel: TextChannel | DMChannel | NewsChannel,
+        id: number
+    ) {
+        const e = this.client.database.cache.events.get(`${id}`);
+        if (!e) {
+            this.client.response.emit(
+                channel,
+                `There is no event associated with that number this week.`,
+                "invalid"
+            );
+            return;
+        }
+        const org = await this.client.spreadsheet.fetchOrg(
+            e.abbr.toLowerCase()
+        );
+        if (!org) {
+            this.client.response.emit(
+                channel,
+                `Could not find a corresponding org with this event.`,
+                "error"
+            );
+            return;
+        }
+
+        const encodedData = {
+            newsletter: true,
+            reactions: {
+                _rsvp: id,
+            },
+        };
+
+        const embed = new MessageEmbed({
+            description: `${encode(
+                encodedData
+            )}🎟 To RSVP for this event, send the command \`${
+                settings.prefix
+            }rsvp ${e.event.id}\``,
+            image: { url: e.event.posterUrl },
+            color: org.color,
+            author: {
+                name: `${e.event.name} | ${org.abbr} Event Info`,
+                icon_url: org.logo,
+                url: org.website,
+            },
+            footer: {
+                text: `Powered by Newsletter Bot`,
+                iconURL: this.client.user!.avatarURL() as string,
+            },
+        });
+
+        // add the fields
+        embed.addField("__**Name**__", e.event.name);
+
+        if (e.event.description)
+            embed.addField("__**Details**__", e.event.description);
+
+        embed.addField(
+            "__**Date**__",
+            `\`${e.event.start?.toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+            })}\` at \`${e.event.start?.toLocaleString("en-US", {
+                hour: "numeric",
+                minute: "numeric",
+                hour12: true,
+            })}\``
+        );
+
+        if (e.event.team)
+            embed.addField("__**Team/Division**__", e.event.team, true);
+        if (e.event.location)
+            embed.addField("__**Location**__", e.event.location, true);
+        if (e.event.speaker)
+            embed.addField("__**Host(s)**__", e.event.speaker, true);
+        if (e.event.speakerContact)
+            embed.addField(
+                "__**Host(s) Contact**__",
+                e.event.speakerContact,
+                true
+            );
+
+        // check if poster url legit
+        if (isUrl(e.event.posterUrl)) embed.setImage(e.event.posterUrl);
+
+        channel.send(embed);
     }
 }
 
