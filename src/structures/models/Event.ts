@@ -1,7 +1,7 @@
 import { Schema, model, Document } from "mongoose";
 import { SpreadsheetEvent } from "../managers/SpreadsheetManager";
 
-export interface EventData extends Document {
+export interface EventData {
     _id: string;
     event: SpreadsheetEvent;
     abbr: string;

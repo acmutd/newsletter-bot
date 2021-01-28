@@ -6,7 +6,6 @@ import MemberSchema, { iMember } from "../models/Member";
 import TaskSchema, { iTask } from "../models/Task";
 import OrgSchema, { iOrg, OrgData } from "../models/Org";
 import EventSchema, { EventData, iEvent } from "../models/Event";
-import SpreadsheetManager, { SpreadsheetEvent } from "./SpreadsheetManager";
 
 export interface SchemaTypes {
     // member: Model<iMessage>
@@ -61,11 +60,7 @@ export default class DatabaseManager {
         });
 
         // replace console.log with a logger
-        this.m.connection.on("error", (err) =>
-            console.log(
-                "There was a connection error in DatabaseManager: " + err
-            )
-        );
+        this.m.connection.on("error", (err) => console.log("There was a connection error in DatabaseManager: " + err));
     }
     public dispose() {
         this.m.connection.close();
@@ -83,14 +78,9 @@ export default class DatabaseManager {
     public async recache(schema: keyof SchemaTypes, cache?: keyof CacheTypes) {
         try {
             let docs = await (this.schemas[schema] as Model<any>).find({});
-            this.cache[
-                cache ?? (`${schema}s` as keyof CacheTypes)
-            ] = new Collection<string, any>();
+            this.cache[cache ?? (`${schema}s` as keyof CacheTypes)] = new Collection<string, any>();
             docs.forEach((doc) => {
-                this.cache[cache ?? (`${schema}s` as keyof CacheTypes)].set(
-                    doc["_id"] as string,
-                    doc
-                );
+                this.cache[cache ?? (`${schema}s` as keyof CacheTypes)].set(doc["_id"] as string, doc);
             });
         } catch (err) {
             this.client.logger.error(err);
@@ -146,15 +136,9 @@ export default class DatabaseManager {
         }
     }
 
-    public async annoucementAdd(
-        id: string,
-        annoucement: any
-    ): Promise<boolean> {
+    public async annoucementAdd(id: string, annoucement: any): Promise<boolean> {
         try {
-            await this.schemas.org.updateOne(
-                { _id: id },
-                { $push: { annoucements: annoucement } }
-            );
+            await this.schemas.org.updateOne({ _id: id }, { $push: { annoucements: annoucement } });
             await this.recache("org");
             return true;
         } catch (err) {

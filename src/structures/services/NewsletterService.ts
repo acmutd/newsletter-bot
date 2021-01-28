@@ -73,6 +73,9 @@ export default class NewsletterService {
     public async send() {
         if (!this.enabled) return;
 
+        // clear existing rsvps
+        this.client.scheduler.clearTasks("rsvp_reminder");
+
         // emoji guild
         const emojiGuild = await this.client.guilds.fetch(settings.emojiGuild);
 
@@ -115,10 +118,7 @@ export default class NewsletterService {
         }
 
         // initialize newsletter as an array of messages after the banner
-        const newsletter: (
-            | MessageEmbed
-            | { localId: string; abbr: string; embed: MessageEmbed }
-        )[] = [];
+        const newsletter: (MessageEmbed | { localId: string; abbr: string; embed: MessageEmbed })[] = [];
 
         // add org embeds
         orgsWithEvents.forEach((data) => {
@@ -130,28 +130,9 @@ export default class NewsletterService {
         });
 
         // add command list embed
-        newsletter.push(this.client.services.command.buildDMHelp());
+        newsletter.push(this.generateHelp());
 
         // everything has been built, time to send out
-        // const received: Set<string> = new Set<string>(); // set of userIDs, tracked to prevent double-sending to the same user
-        // const users: Map<string, any> = new Map<string, any>(); // map of userID -> subscription & follow preferences from the DB
-
-        // build `users`
-        /*
-        try {
-            const u = await this.client.database.schemas.member.find({});
-            u.forEach((m) =>
-                users.set(m["_id"], {
-                    subscribed: m.preferences.subscribed,
-                    unfollowed: m.preferences.unfollowed
-                        ? [...m.preferences.unfollowed]
-                        : [],
-                })
-            );
-        } catch (e) {
-            this.client.logger.error(e);
-        }
-        */
 
         // loop through org guilds and send newsletter to members
         const orgsWithGuild = orgsWithEvents.filter((o) => !!o.org.guild);
@@ -161,13 +142,10 @@ export default class NewsletterService {
             if (data.org.newsletterChannel) {
                 const res = await this.client.channels.resolve(data.org.newsletterChannel);
                 if (!res) this.client.error.handleMsg(`Channel not found for ${data.org.abbr}`);
-                else if (!res.isText())
-                    this.client.error.handleMsg(`Channel is not text-based for ${data.org.abbr}`);
+                else if (!res.isText()) this.client.error.handleMsg(`Channel is not text-based for ${data.org.abbr}`);
                 else channel = res;
             } else {
-                this.client.error.handleMsg(
-                    `Newsletter channel is not configured for ${data.org.abbr}`
-                );
+                this.client.error.handleMsg(`Newsletter channel is not configured for ${data.org.abbr}`);
             }
             if (!channel) continue;
 
@@ -177,7 +155,8 @@ export default class NewsletterService {
             // send the banner
             await channel.send({
                 files: [
-                    "https://media.discordapp.net/attachments/744488968338276436/791967343223767060/newsletter_banner.png",
+                    // "https://media.discordapp.net/attachments/744488968338276436/791967343223767060/newsletter_banner.png",
+                    "https://cdn.discordapp.com/attachments/744488968338276434/804190590682005554/newsletter-banner.png",
                 ],
             });
 
@@ -210,70 +189,13 @@ export default class NewsletterService {
 
             await channel.send(this.buildTOC(tocData));
 
-            /*
-            // send to the members
-            members.forEach(async (m) => {
-                // comment out one of the lines below, depending on whether to send the newsletter to people with unknown preference
-                if (
-                    !received.has(m.id) &&
-                    //users.has(m.id) ? users.get(m.id).subscribed : true &&  // defaults to send if user preference not set.
-                    users.has(m.id)
-                        ? users.get(m.id).subscribed
-                        : false && // defaults to do not send if user preference not set
-                          !m.user.bot
-                ) {
-                    received.add(m.id);
-                    const dmChannel = await m.createDM();
-                    let tocData: OrgMessage[] = [];
-
-                    // send the banner
-                    await m.send({
-                        files: [
-                            "https://media.discordapp.net/attachments/744488968338276436/791967343223767060/newsletter_banner.png",
-                        ],
-                    });
-
-                    // send the rest of the newsletter, one message at a time.
-                    for (const n of newsletter) {
-                        if (!(n instanceof MessageEmbed) && n.localId) {            // if this is an org-related embed
-                            if (!users.get(m.id).unfollowed.includes(n.localId)) {  // if user is not unfollowed from this org
-                                const msg = await m.send(n);
-                                // track message in the table of contents
-                                tocData.push({
-                                    orgAbbr: n.abbr,
-                                    msg
-                                });
-                            }
-                        } 
-
-                        else await m.send(n);
-                    }
-
-                    await m.send(this.buildTOC(tocData));
-
-                    // console.log(
-                    //     "Would send newsletter to " +
-                    //         m.user.username +
-                    //         "#" +
-                    //         m.user.discriminator
-                    // );
-                }
-            });
-            */
+            if (data.org.pingEveryone) await channel.send(`@everyone 📰 ECS Weekly Newsletter has arrived!`);
         }
         this.schedule();
     }
 
     public buildOrgEmbed(data: OrgWithEvents): MessageEmbed {
-        const weekdays = [
-            "Sunday",
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-        ];
+        const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
         const tte: any = {};
         data.events.forEach((e) => {
@@ -311,7 +233,7 @@ export default class NewsletterService {
         } = {
             newsletter: true,
             reactions: {
-                _info: data.org.localId,
+                // _info: data.org.localId,
             },
         };
 
@@ -377,6 +299,7 @@ export default class NewsletterService {
         // we'll add more to this
         const embed = new MessageEmbed();
         embed.setTitle(`\'${e.event.name}\' is starting in ${minutesBeforeStart} minutes!`);
+        embed.setDescription(e.event.rsvpMessage);
         if (e.event.location) embed.addField("Location", e.event.location);
 
         try {
@@ -392,7 +315,11 @@ export default class NewsletterService {
         }
     }
 
-    public handleReaction(reaction: MessageReaction, user: User) {
+    public async handleReaction(reaction: MessageReaction, user: User) {
+        // fetch everything to ensure all the data is complete
+        if (reaction.partial) await reaction.fetch();
+        await reaction.users.fetch();
+
         if (reaction.message.embeds.length == 0) return;
         if (!reaction.message.embeds[0].description) return;
 
@@ -410,23 +337,25 @@ export default class NewsletterService {
         if (!reactionRes) return;
         if (user.bot) return;
 
+        // remove their reaction
+        reaction.users.remove(user.id);
+
         if (reaction.emoji.name == "_rsvp") {
             // rsvp to event
-            console.log("rsvp reaction");
             user.createDM().then((channel) => {
                 this.rsvp(channel, user, reactionRes as number);
             });
-        } else if (reaction.emoji.name == "_info") {
-            // dm org info
-            console.log("info reaction");
-            user.createDM().then((channel) => {
-                // this.sendOrgInfo(channel);
-                // this.buildOrgEmbed()
-            });
-        } else {
+        }
+        // else if (reaction.emoji.name == "_info") {
+        //     // dm org info
+        //     user.createDM().then((channel) => {
+        //         // this.sendOrgInfo(channel);
+        //         // this.buildOrgEmbed()
+        //     });
+        // }
+        else {
             if (typeof reactionRes == "number") {
                 // dm event info, with reaction button to rsvp
-                console.log("number reaction");
                 user.createDM().then((channel) => {
                     this.sendEventInfo(channel, reactionRes as number);
                 });
@@ -436,29 +365,19 @@ export default class NewsletterService {
 
     public async sendEventInfo(channel: TextChannel | DMChannel | NewsChannel, id: number) {
         const emojiGuild = await this.client.guilds.fetch(settings.emojiGuild);
-        let rsvpEmote: GuildEmoji | string | undefined = emojiGuild.emojis.cache.find(
-            (e) => e.name == "_rsvp"
-        );
+        let rsvpEmote: GuildEmoji | string | undefined = emojiGuild.emojis.cache.find((e) => e.name == "_rsvp");
 
         if (!rsvpEmote) rsvpEmote = "🎟";
 
         // get event
         const e = this.client.database.cache.events.get(`${id}`);
         if (!e) {
-            this.client.response.emit(
-                channel,
-                `There is no event associated with that number this week.`,
-                "invalid"
-            );
+            this.client.response.emit(channel, `There is no event associated with that number this week.`, "invalid");
             return;
         }
         const org = await this.client.spreadsheet.fetchOrg(e.abbr.toLowerCase());
         if (!org) {
-            this.client.response.emit(
-                channel,
-                `Could not find a corresponding org with this event.`,
-                "error"
-            );
+            this.client.response.emit(channel, `Could not find a corresponding org with this event.`, "error");
             return;
         }
 
@@ -507,8 +426,7 @@ export default class NewsletterService {
         if (e.event.team) embed.addField("__**Team/Division**__", e.event.team, true);
         if (e.event.location) embed.addField("__**Location**__", e.event.location, true);
         if (e.event.speaker) embed.addField("__**Host(s)**__", e.event.speaker, true);
-        if (e.event.speakerContact)
-            embed.addField("__**Host(s) Contact**__", e.event.speakerContact, true);
+        if (e.event.speakerContact) embed.addField("__**Host(s) Contact**__", e.event.speakerContact, true);
 
         // check if poster url legit
         if (isUrl(e.event.posterUrl)) embed.setImage(e.event.posterUrl);
@@ -522,12 +440,9 @@ export default class NewsletterService {
 
     public async rsvp(channel: TextChannel | DMChannel | NewsChannel, user: User, id: number) {
         const e = this.client.database.cache.events.get(`${id}`);
+
         if (!e) {
-            this.client.response.emit(
-                channel,
-                `There is no event associated with that number this week.`,
-                "invalid"
-            );
+            this.client.response.emit(channel, `There is no event associated with that number this week.`, "invalid");
             return;
         }
 
@@ -540,7 +455,9 @@ export default class NewsletterService {
             } else {
                 this.client.response.emit(
                     channel,
-                    `This event is already starting within ${minutesBeforeStart} minutes`,
+                    `This event is already starting within ${minutesBeforeStart} minutes\n\n
+                    ${e.event.rsvpMessage}
+                    `,
                     "invalid"
                 );
             }
@@ -553,29 +470,34 @@ export default class NewsletterService {
             return false;
         });
         if (res) {
-            this.client.response.emit(
-                channel,
-                `You have already RSVP'd for \`${e.event.name}\`.`,
-                "invalid"
-            );
+            this.client.response.emit(channel, `You have already RSVP'd for \`${e.event.name}\`.`, "invalid");
             return;
         }
 
         this.client.scheduler.createTask({
             type: "rsvp_reminder",
             payload: {
-                eventID: id,
+                eventID: id.toString(),
                 userID: user.id,
                 minutesBeforeStart,
             },
             cron: new Date(e.event.start!.getTime() - minutesBeforeStart * 60000),
         });
 
-        this.client.response.emit(
-            channel,
-            `Successfully RSVP'd for \`${e.event.name}\`.`,
-            "success"
+        this.client.response.emit(channel, `Successfully RSVP'd for \`${e.event.name}\`.`, "success");
+    }
+
+    public generateHelp() {
+        const embed = new MessageEmbed({
+            title: "Newsletter Help",
+        });
+        embed.addField(
+            `<:_1:803215905190445066> \`or any other number\``,
+            "The number corresponds to an event on the newsletter. If you click it, I will private messages you more information about the event.",
+            true
         );
+
+        return embed;
     }
 }
 

@@ -7,6 +7,7 @@ export interface iTask extends mongoose.Document {
     type: TaskType;
     cron: string | Date;
     payload?: any;
+    delayed?: string;
 }
 
 const taskSchema = new mongoose.Schema(

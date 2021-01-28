@@ -74,6 +74,7 @@ export default class ScheduleManager {
                 cron: t.cron,
                 type: t.type,
                 payload: t.payload,
+                delayed: t.delayed,
             });
         }
 
@@ -115,8 +116,15 @@ export default class ScheduleManager {
      */
     public async runTask(task: Task) {
         // remove the task from all records if not cron
-        if (typeof task.cron !== 'string')
+        if (typeof task.cron !== "string") await this.deleteTask(task.id!);
+
+        // dont run if it is a delayed task
+        if (task.delayed) {
+            task.delayed = undefined;
             await this.deleteTask(task.id!);
+            await this.createTask(task);
+            return;
+        }
 
         switch (task.type) {
             case "newsletter":
@@ -124,10 +132,7 @@ export default class ScheduleManager {
                 break;
             case "reminder":
                 // FOR TESTING
-                this.client.guilds.cache
-                    .first()
-                    ?.members.cache.get(task.payload.id)
-                    ?.send(task.payload.message);
+                this.client.guilds.cache.first()?.members.cache.get(task.payload.id)?.send(task.payload.message);
                 break;
             case "rsvp_reminder":
                 // example: this.client.rsvpmanager.sendRSVP(data.event_id);
@@ -138,6 +143,13 @@ export default class ScheduleManager {
                 break;
         }
     }
+
+    public async clearTasks(type: TaskType) {
+        let tasksToDelete = this.tasks.filter((t) => t.type === type).map((t) => t.id);
+        tasksToDelete.forEach((id) => {
+            id && this.deleteTask(id);
+        });
+    }
 }
 
 export interface Task {
@@ -145,6 +157,7 @@ export interface Task {
     type: TaskType;
     cron: string | Date;
     payload?: any;
+    delayed?: string;
     job?: Job;
 }
 
