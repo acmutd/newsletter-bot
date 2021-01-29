@@ -12,7 +12,7 @@ export default class TaskCommand extends Command {
                 "Suite of tools to show and manipulate scheduled tasks.\n" +
                 " List: list tasks, keyed by their ID\n" +
                 " Delay: push a task back by some number of minutes",
-            usage: ["task [ list | delay [id] [mins] ]"],
+            usage: ["task [ list | delay [id] [mins] | run | runnow | info ]"],
             dmWorks: true, // only works for eric and jafar anyways
         });
     }
@@ -144,6 +144,34 @@ export default class TaskCommand extends Command {
 
                 const startTime = new Date().getTime();
                 await client.scheduler.runTask(task);
+
+                runMsg.delete();
+                return client.response.emit(
+                    msg.channel,
+                    `Task completed in ${(new Date().getTime() - startTime) / 1000} seconds.`,
+                    "success"
+                );
+            }
+
+            case "runnow": {
+                if (args.length != 2) return this.sendInvalidUsage(msg, client);
+
+                const id = args[1];
+                const task = client.scheduler.getTask(id);
+
+                if (task == undefined) {
+                    return client.response.emit(msg.channel, `A task with ID '${id}' could not be found!`, "invalid");
+                }
+
+                const runMsg = await msg.channel.send("Your task is running...");
+
+                const startTime = new Date().getTime();
+                await client.scheduler.runTask(task);
+
+                // replace the task with a delayed property set
+                client.scheduler.deleteTask(task.id!);
+                task.delayed = task.id + "_runnow";
+                client.scheduler.createTask(task);
 
                 runMsg.delete();
                 return client.response.emit(
