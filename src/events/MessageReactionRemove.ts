@@ -2,12 +2,12 @@ import Event from "../structures/Event";
 import ACMClient from "../structures/Bot";
 import { MessageReaction, User } from "discord.js";
 
-export default class MessageReactionAddEvent extends Event {
+export default class MessageReactionRemoveEvent extends Event {
     constructor(client: ACMClient) {
-        super(client, "messageReactionAdd");
+        super(client, "messageReactionRemove");
     }
 
     public async emit(client: ACMClient, reaction: MessageReaction, user: User) {
-        client.services.newsletter.handleReactionAdd(reaction, user);
+        client.services.newsletter.handleReactionRemove(reaction, user);
     }
 }

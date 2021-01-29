@@ -136,60 +136,69 @@ export default class NewsletterService {
 
         // loop through org guilds and send newsletter to members
         const orgsWithGuild = orgsWithEvents.filter((o) => !!o.org.guild);
+
+        console.log(orgsWithGuild);
+
         for (const data of orgsWithGuild) {
-            // resolve newsletter channel
-            let channel: TextChannel | NewsChannel | DMChannel | undefined;
-            if (data.org.newsletterChannel) {
-                const res = await this.client.channels.resolve(data.org.newsletterChannel);
-                if (!res) this.client.error.handleMsg(`Channel not found for ${data.org.abbr}`);
-                else if (!res.isText()) this.client.error.handleMsg(`Channel is not text-based for ${data.org.abbr}`);
-                else channel = res;
-            } else {
-                this.client.error.handleMsg(`Newsletter channel is not configured for ${data.org.abbr}`);
-            }
-            if (!channel) continue;
+            try {
+                console.log("starting w " + data.org.abbr);
+                // resolve newsletter channel
+                let channel: TextChannel | NewsChannel | DMChannel | undefined;
 
-            // initialize temporary TOC data for this org
-            let tocData: OrgMessage[] = [];
-
-            // send the banner
-            await channel.send({
-                files: [
-                    // "https://media.discordapp.net/attachments/744488968338276436/791967343223767060/newsletter_banner.png",
-                    "https://cdn.discordapp.com/attachments/744488968338276434/804190590682005554/newsletter-banner.png",
-                ],
-            });
-
-            // send the rest of the newsletter, one message at a time.
-            for (const n of newsletter) {
-                // if this is an org-related embed
-                let msg;
-                let embed: MessageEmbed;
-                if (!(n instanceof MessageEmbed) && n.localId) {
-                    msg = await channel.send(n.embed);
-                    embed = n.embed;
-                    // track message in the table of contents
-                    tocData.push({
-                        orgAbbr: n.abbr,
-                        msg,
-                    });
+                if (data.org.newsletterChannel) {
+                    const res = await this.client.channels.resolve(data.org.newsletterChannel);
+                    if (!res) this.client.error.handleMsg(`Channel not found for ${data.org.abbr}`);
+                    channel = res as TextChannel | NewsChannel | DMChannel;
                 } else {
-                    msg = await channel.send(n);
-                    embed = n as MessageEmbed;
+                    this.client.error.handleMsg(`Newsletter channel is not configured for ${data.org.abbr}`);
                 }
-                const obj = decode(embed.description);
-                if (obj) {
-                    const keys = Object.keys(obj.reactions);
-                    for (const name of keys) {
-                        const emote = emojiGuild.emojis.cache.find((e) => e.name == name);
-                        if (emote) await msg.react(emote);
+                if (!channel) continue;
+
+                // initialize temporary TOC data for this org
+                let tocData: OrgMessage[] = [];
+
+                console.log("sending banner for " + data.org.abbr);
+                // send the banner
+                await channel.send({
+                    files: [
+                        // "https://media.discordapp.net/attachments/744488968338276436/791967343223767060/newsletter_banner.png",
+                        "https://cdn.discordapp.com/attachments/744488968338276434/804190590682005554/newsletter-banner.png",
+                    ],
+                });
+
+                // send the rest of the newsletter, one message at a time.
+                for (const n of newsletter) {
+                    // if this is an org-related embed
+                    let msg;
+                    let embed: MessageEmbed;
+                    if (!(n instanceof MessageEmbed) && n.localId) {
+                        msg = await channel.send(n.embed);
+                        embed = n.embed;
+                        // track message in the table of contents
+                        tocData.push({
+                            orgAbbr: n.abbr,
+                            msg,
+                        });
+                    } else {
+                        msg = await channel.send(n);
+                        embed = n as MessageEmbed;
+                    }
+                    const obj = decode(embed.description);
+                    if (obj) {
+                        const keys = Object.keys(obj.reactions);
+                        for (const name of keys) {
+                            const emote = emojiGuild.emojis.cache.find((e) => e.name == name);
+                            if (emote) await msg.react(emote);
+                        }
                     }
                 }
+
+                await channel.send(this.buildTOC(tocData));
+
+                if (data.org.pingEveryone) await channel.send(`@everyone 📰 ECS Weekly Newsletter has arrived!`);
+            } catch (e) {
+                this.client.error.handleMsg(`Error in sending newsletter to ${data.org.name}: ${e}`);
             }
-
-            await channel.send(this.buildTOC(tocData));
-
-            if (data.org.pingEveryone) await channel.send(`@everyone 📰 ECS Weekly Newsletter has arrived!`);
         }
         this.schedule();
     }
@@ -315,7 +324,7 @@ export default class NewsletterService {
         }
     }
 
-    public async handleReaction(reaction: MessageReaction, user: User) {
+    public async handleReactionRemove(reaction: MessageReaction, user: User) {
         // fetch everything to ensure all the data is complete
         if (reaction.partial) await reaction.fetch();
         await reaction.users.fetch();
@@ -337,8 +346,35 @@ export default class NewsletterService {
         if (!reactionRes) return;
         if (user.bot) return;
 
-        // remove their reaction
-        reaction.users.remove(user.id);
+        if (reaction.emoji.name == "_rsvp") {
+            // rsvp to event
+            user.createDM().then((channel) => {
+                this.unrsvp(channel, user, reactionRes as number);
+            });
+        }
+    }
+
+    public async handleReactionAdd(reaction: MessageReaction, user: User) {
+        // fetch everything to ensure all the data is complete
+        if (reaction.partial) await reaction.fetch();
+        await reaction.users.fetch();
+
+        if (reaction.message.embeds.length == 0) return;
+        if (!reaction.message.embeds[0].description) return;
+
+        const obj = decode(reaction.message.embeds[0].description);
+        if (!obj) return;
+        if (!obj.newsletter) return;
+        if (!obj.reactions) return;
+
+        let reactionRes: number | string | undefined;
+
+        Object.keys(obj.reactions).forEach((n) => {
+            if (reaction.emoji.name.includes(n)) reactionRes = obj.reactions[n];
+        });
+
+        if (!reactionRes) return;
+        if (user.bot) return;
 
         if (reaction.emoji.name == "_rsvp") {
             // rsvp to event
@@ -355,6 +391,9 @@ export default class NewsletterService {
         // }
         else {
             if (typeof reactionRes == "number") {
+                // remove their reaction
+                reaction.users.remove(user.id);
+
                 // dm event info, with reaction button to rsvp
                 user.createDM().then((channel) => {
                     this.sendEventInfo(channel, reactionRes as number);
@@ -408,7 +447,8 @@ export default class NewsletterService {
         // add the fields
         embed.addField("__**Name**__", e.event.name);
 
-        if (e.event.description) embed.addField("__**Details**__", e.event.description);
+        const desc = e.event.description;
+        if (desc) embed.addField("__**Details**__", desc.length > 1000 ? desc.substr(0, 1000) + "…" : desc);
 
         embed.addField(
             "__**Date**__",
@@ -437,6 +477,47 @@ export default class NewsletterService {
     }
 
     public async sendOrgInfo(channel: TextChannel | DMChannel | NewsChannel) {}
+
+    public async unrsvp(channel: TextChannel | DMChannel | NewsChannel, user: User, id: number) {
+        const e = this.client.database.cache.events.get(`${id}`);
+
+        if (!e) {
+            this.client.response.emit(channel, `There is no event associated with that number this week.`, "invalid");
+            return;
+        }
+
+        const minutesBeforeStart = 30;
+        const toBeNotified = new Date(e.event.start!.getTime() - minutesBeforeStart * 60000);
+        const now = new Date();
+        if (toBeNotified < now) {
+            if (e.event.start! < now) {
+                this.client.response.emit(channel, `This event has already started!`, "invalid");
+            } else {
+                this.client.response.emit(
+                    channel,
+                    `This event is already starting within ${minutesBeforeStart} minutes\n\n
+                    ${e.event.rsvpMessage}
+                    `,
+                    "invalid"
+                );
+            }
+            return;
+        }
+        const res = this.client.scheduler.tasks.find((t) => {
+            if (t.payload && t.payload.eventID && t.payload.userID) {
+                return t.payload.eventID == `${id}` && t.payload.userID == `${user.id}`;
+            }
+            return false;
+        });
+        if (!res) {
+            this.client.response.emit(channel, `You have not RSVP'd for \`${e.event.name}\`.`, "invalid");
+            return;
+        }
+
+        this.client.scheduler.deleteTask(res.id!);
+
+        this.client.response.emit(channel, `Successfully un-RSVP'd for \`${e.event.name}\`.`, "success");
+    }
 
     public async rsvp(channel: TextChannel | DMChannel | NewsChannel, user: User, id: number) {
         const e = this.client.database.cache.events.get(`${id}`);

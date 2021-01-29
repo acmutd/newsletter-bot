@@ -13,7 +13,7 @@ export default class TaskCommand extends Command {
                 " List: list tasks, keyed by their ID\n" +
                 " Delay: push a task back by some number of minutes",
             usage: ["task [ list | delay [id] [mins] ]"],
-            dmWorks: false,
+            dmWorks: true, // only works for eric and jafar anyways
         });
     }
 

@@ -52,7 +52,7 @@ export default class NewsletterClient extends Client {
         const intents = new Intents([Intents.NON_PRIVILEGED, "GUILD_MEMBERS"]);
         super({
             ws: { intents },
-            partials: ["REACTION", "MESSAGE"],
+            partials: ["REACTION", "MESSAGE", "CHANNEL"],
             fetchAllMembers: true,
         });
         this.settings = settings;
@@ -95,6 +95,6 @@ export default class NewsletterClient extends Client {
 
         await this.login(this.config.token);
 
-        await this.services.newsletter.send();
+        // await this.services.newsletter.send();
     }
 }

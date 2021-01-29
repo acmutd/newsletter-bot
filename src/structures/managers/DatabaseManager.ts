@@ -71,6 +71,7 @@ export default class DatabaseManager {
             // await this.recache('response');
             // await this.recache('rrmessage');
             await this.recache("org");
+            await this.recache("event");
         } catch (err) {
             this.client.logger.error(err);
         }
