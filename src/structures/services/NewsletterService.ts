@@ -424,9 +424,9 @@ export default class NewsletterService {
         };
 
         const embed = new MessageEmbed({
-            description: `${encode(encodedData)}🎟 To RSVP for this event, either react to ${
+            description: `${encode(encodedData)}🎟 To RSVP for this event, react to ${
                 typeof rsvpEmote == "string" ? rsvpEmote : `<:${rsvpEmote.name}:${rsvpEmote.id}>`
-            }, or send the command \`${settings.prefix}rsvp ${e.event.id}\``,
+            }.`,
             image: { url: e.event.posterUrl },
             color: org.color,
             author: {
