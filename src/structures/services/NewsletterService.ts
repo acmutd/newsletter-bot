@@ -137,11 +137,8 @@ export default class NewsletterService {
         // loop through org guilds and send newsletter to members
         const orgsWithGuild = orgsWithEvents.filter((o) => !!o.org.guild);
 
-        console.log(orgsWithGuild);
-
         for (const data of orgsWithGuild) {
             try {
-                console.log("starting w " + data.org.abbr);
                 // resolve newsletter channel
                 let channel: TextChannel | NewsChannel | DMChannel | undefined;
 
@@ -157,7 +154,6 @@ export default class NewsletterService {
                 // initialize temporary TOC data for this org
                 let tocData: OrgMessage[] = [];
 
-                console.log("sending banner for " + data.org.abbr);
                 // send the banner
                 await channel.send({
                     files: [

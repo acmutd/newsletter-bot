@@ -166,6 +166,7 @@ export default class TaskCommand extends Command {
                 const runMsg = await msg.channel.send("Your task is running...");
 
                 const startTime = new Date().getTime();
+                task.delayed = undefined;
                 await client.scheduler.runTask(task);
 
                 // replace the task with a delayed property set
