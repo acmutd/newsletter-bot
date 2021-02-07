@@ -136,20 +136,24 @@ export default class NewsletterService {
 
         // loop through org guilds and send newsletter to members
         const orgsWithGuild = orgsWithEvents.filter((o) => !!o.org.guild);
+        // const orgs = this.client.spreadsheet.orgs.array().filter((o) => !!o.guild && !!newsletterChannel);
 
         for (const data of orgsWithGuild) {
             try {
                 // resolve newsletter channel
-                let channel: TextChannel | NewsChannel | DMChannel | undefined;
+                let channel: TextChannel | NewsChannel | undefined;
 
                 if (data.org.newsletterChannel) {
                     const res = await this.client.channels.resolve(data.org.newsletterChannel);
                     if (!res) this.client.error.handleMsg(`Channel not found for ${data.org.abbr}`);
-                    channel = res as TextChannel | NewsChannel | DMChannel;
+                    channel = res as TextChannel | NewsChannel;
                 } else {
                     this.client.error.handleMsg(`Newsletter channel is not configured for ${data.org.abbr}`);
                 }
                 if (!channel) continue;
+
+                // delete 30
+                await channel.bulkDelete(30);
 
                 // initialize temporary TOC data for this org
                 let tocData: OrgMessage[] = [];
@@ -570,7 +574,7 @@ export default class NewsletterService {
         });
         embed.addField(
             `<:_1:803215905190445066> \`or any other number\``,
-            "The number corresponds to an event on the newsletter. If you click it, I will private messages you more information about the event.",
+            "The number corresponds to an event on the newsletter. If you click it, the bot will private messages you more information about the event.\n**If you don't get a dm, then you've probably disabled DMs from non-friended users.** You will have to change this setting to get messages from the bot.",
             true
         );
 
