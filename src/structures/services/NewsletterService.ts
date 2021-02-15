@@ -135,8 +135,13 @@ export default class NewsletterService {
         // everything has been built, time to send out
 
         // loop through org guilds and send newsletter to members
-        const orgsWithGuild = orgsWithEvents.filter((o) => !!o.org.guild);
-        // const orgs = this.client.spreadsheet.orgs.array().filter((o) => !!o.guild && !!newsletterChannel);
+        // const orgsWithGuild = orgsWithEvents.filter((o) => !!o.org.guild);
+        const orgsWithGuild: { org: SpreadsheetOrg }[] = this.client.spreadsheet.orgs
+            .array()
+            .filter((o) => !!o.guild && !!o.newsletterChannel)
+            .map((o) => {
+                return { org: o };
+            });
 
         for (const data of orgsWithGuild) {
             try {
